@@ -1,0 +1,13 @@
+# Everything needed to run the test suite and the linters.
+#
+# The editable install is what puts `beancount_zakat` on the path and pulls in
+# the `fava` and `dev` extras declared in pyproject.toml.
+#
+#     python -m venv .venv && . .venv/bin/activate
+#     pip install -r requirements-dev.txt
+
+-e .[dev]
+
+# Building and checking a release. Not needed to run the tests.
+build>=1.2
+twine>=5.1

@@ -1,0 +1,293 @@
+{#-
+  About Zakat & Methodology.
+
+  Deliberately a Jinja template rather than a string inside JavaScript or
+  Python, so the educational content stays reviewable in diffs and testable by
+  the template checks in tests/test_templates.py.
+
+  Facts that are universally agreed are stated as such. Everything this tool
+  *chooses* -- above all the layered pro-rata model -- is labelled as a choice.
+-#}
+<h3>What zakat is</h3>
+<p>Zakat is the obligatory annual charitable due on qualifying wealth, one of the
+   five pillars of Islam. It is a transfer of a defined share of accumulated
+   wealth to defined categories of recipients, not a voluntary donation and not a
+   tax on income. The Qur&rsquo;an pairs it repeatedly with prayer
+   (for example <cite>al-Baqarah</cite> 2:110) and sets out its recipients in
+   <cite>al-Tawbah</cite> 9:60.</p>
+
+<h3>The three ideas this tool works with</h3>
+<dl class="bz-defs">
+  <dt><strong>Nisab</strong></dt>
+  <dd>The minimum amount of wealth at which zakat becomes due. It is defined by a
+      <em>weight of metal</em>, not a fixed currency amount, so its value in your
+      currency moves with the metal price.</dd>
+  <dt><strong>Sahib-e-nisab</strong></dt>
+  <dd>A person whose zakatable net wealth meets or exceeds the nisab. This tool
+      treats you as sahib-e-nisab for a basis whenever net zakatable wealth is
+      greater than or equal to that basis&rsquo;s nisab.</dd>
+  <dt><strong>Hawl</strong></dt>
+  <dd>The holding period: wealth must be held for one complete lunar year before
+      zakat falls due on it. (Spelt <em>hawl</em> throughout; you will also see
+      &ldquo;haul&rdquo; elsewhere.)</dd>
+</dl>
+
+<h3>The constants</h3>
+<div class="bz-scroll">
+  <table class="bz-table">
+    <caption>Values this extension uses. The rate and the hawl are universally
+             agreed; the gram equivalents are not &mdash; see Limitations.</caption>
+    <thead><tr><th scope="col">Quantity</th><th scope="col" class="num">Value</th>
+               <th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Zakat rate</th><td class="num">{{ ctx.constants.rate }} (one fortieth)</td>
+          <td>Universally agreed</td></tr>
+      <tr><th scope="row">Hawl</th><td class="num">one complete lunar year</td>
+          <td>Universally agreed</td></tr>
+      <tr><th scope="row">Gold nisab</th>
+          <td class="num">{{ ctx.constants.gold_grams }} g = {{ ctx.constants.gold_tola }} tola</td>
+          <td>Common standard; gram figure varies by institution</td></tr>
+      <tr><th scope="row">Silver nisab</th>
+          <td class="num">{{ ctx.constants.silver_grams }} g = {{ ctx.constants.silver_tola }} tola</td>
+          <td>Common standard; gram figure varies by institution</td></tr>
+      <tr><th scope="row">Tola</th><td class="num">{{ ctx.constants.tola_grams }} g</td>
+          <td>Definition used here, consistent across both weights</td></tr>
+      <tr><th scope="row">Mean lunar year</th><td class="num">{{ ctx.constants.lunar_year_days }} days</td>
+          <td>Calculation constant &mdash; see Methodology step 6</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>The two bases are alternatives</h3>
+<p>The nisab is classically given <em>either</em> as a weight of gold <em>or</em> as
+   a weight of silver. Because the metals have diverged enormously in relative price
+   since those weights were set, the two thresholds are now very far apart &mdash;
+   in this ledger, {{ m(gold.nisab) }} against {{ m(silver.nisab) }}.</p>
+<p>This extension therefore computes <strong>both, completely independently</strong>,
+   from the same wealth history, and presents them side by side. It does not pick
+   one for you, and the two figures must <strong>never</strong> be added together.
+   The silver basis is lower, so it captures more people and yields a larger
+   liability; the gold basis is higher and yields a smaller one. Both positions are
+   held by recognised scholarship, and which applies to you depends on your madhab
+   and your own scholar&rsquo;s guidance.</p>
+
+<h3>Methodology &mdash; exactly what this extension computes</h3>
+<p class="bz-note bz-note--warn"><strong>Read this section carefully.</strong> The
+   layered, pro-rata model below is <em>this tool&rsquo;s</em> method for reconstructing
+   historical liability from a ledger. It is not a standard scholarly formula, and
+   most zakat guidance instead has you value your wealth once a year on your zakat
+   anniversary and pay 2.5% of that. See Limitations.</p>
+<ol>
+  <li><strong>Select accounts.</strong> Only accounts carrying
+      <span class="bz-key">beancount_zakat</span> metadata on their
+      <code>Open</code> directive take part &mdash; as an <code>asset</code>,
+      a <code>liability</code>, or an <code>expense</code> (zakat payments).
+      Classification is exact: sub-accounts are not pulled in automatically.</li>
+  <li><strong>Build a wealth timeline.</strong> Postings to those accounts are
+      replayed into running balances. Net zakatable wealth is
+      <code>sum(assets) + sum(liabilities)</code>. Liabilities keep their natural
+      negative Beancount sign, so a debt reduces wealth by simple addition.</li>
+  <li><strong>Value everything.</strong> Holdings in a commodity other than the
+      operating currency are converted at the most recent price dated at or before
+      the valuation date. A snapshot is taken on every date a posting occurs
+      <em>and</em> on every date a relevant price moves, so a holding is re-valued
+      when its price changes even if you did not trade.</li>
+  <li><strong>Compute the nisab over time.</strong> Metal prices come from ordinary
+      <code>price</code> directives in your own ledger. A day with no price of its
+      own reuses the last known price. If <em>no</em> price exists at or before a
+      date, the nisab is unknown and the report says so loudly &mdash; it is never
+      quietly treated as zero.</li>
+  <li><strong>Slice the wealth into levels.</strong> Every distinct positive value
+      your net wealth has ever taken becomes a <em>level</em>. Sorted ascending,
+      each level&rsquo;s <em>marginal amount</em> is the gap to the level below it.
+      Each marginal slice then carries its own independent hawl, because that
+      portion of your wealth was acquired at a different time.</li>
+  <li><strong>Time each slice.</strong> A slice&rsquo;s holding period runs while net
+      wealth stays at or above that slice&rsquo;s level <em>and</em> total net wealth
+      stays at or above the nisab. Period length is the inclusive day count,
+      <code>(end &minus; start) + 1</code>, converted to lunar years by dividing by
+      {{ ctx.constants.lunar_year_days }} days.</li>
+  <li><strong>Handle resets.</strong> Falling below a slice&rsquo;s level ends that
+      slice&rsquo;s period. Falling below the nisab ends it too, and is recorded as an
+      explicit nisab-break row on the Calculation Detail tab. When wealth recovers, a
+      <em>new</em> period begins from scratch &mdash; elapsed time is not carried over.
+      Every period is judged entirely on its own.</li>
+  <li><strong>Charge each qualifying period.</strong> A period counts only once it
+      reaches a full lunar year. Then:
+      <pre class="bz-code">zakat_due = marginal_amount &times; elapsed_lunar_years &times; {{ ctx.constants.rate }}</pre>
+      <p><strong>The stated position of this tool:</strong> the hawl is the
+         <em>condition</em> that makes wealth zakatable &mdash; wealth must sit at or
+         above the nisab for one complete lunar year before anything is owed on it
+         &mdash; and not a restriction limiting liability to whole years. Once that
+         condition is met, liability accrues in proportion to the time the wealth has
+         been held. A slice held 3.34 lunar years is therefore charged 8.35% of that
+         slice, not 7.5% for three completed anniversaries.</p>
+      <p>This is a deliberate interpretive choice, and it is the single point on which
+         this tool most clearly differs from the common practice of valuing wealth once
+         a year on a fixed anniversary and paying 2.5% of that figure. It is
+         well suited to paying accumulated zakat in Ramadan across however many years
+         are outstanding. <strong>Raise the method itself with your scholar, not only
+         the numbers.</strong> Year-by-year figures are on the <b>Yearly Summary</b>
+         tab.</p></li>
+  <li><strong>Repeat for the other metal.</strong> Steps 5&ndash;8 run again, unchanged,
+      against the other basis&rsquo;s nisab.</li>
+  <li><strong>Apply payments last.</strong> Historical liability is computed first and
+      is never altered by what you have paid. Payments are then subtracted to give a
+      <strong>signed</strong> balance: positive means still owed, zero means
+      discharged, negative means paid in excess. It is never clamped to zero.</li>
+</ol>
+
+<h4>Rounding</h4>
+<p>Every amount is computed in exact decimal arithmetic &mdash; never binary floating
+   point. Each period&rsquo;s zakat is rounded to {{ cur }} 0.01 using round-half-up at
+   the moment it is computed; those rounded figures are what get summed. Only chart
+   pixel coordinates are ever converted to floating point.</p>
+
+<h4>Allocation to reporting years</h4>
+<p>A reporting year on the Yearly Summary tab is a Hijri calendar year, 1 Muharram to
+   the day before the next 1 Muharram, with exact Gregorian bounds from the Umm
+   al-Qura calendar. A qualifying period that spans several years has its liability
+   split across them pro rata by overlapping days, with the rounding residual placed
+   on the period&rsquo;s final year. The rows therefore sum to the cumulative total
+   <em>exactly</em>; this is enforced by an automated test.</p>
+
+<h4>Calendar handling</h4>
+<p>Two different notions of &ldquo;lunar year&rdquo; are deliberately kept apart. The
+   <strong>calculation</strong> uses only the mean lunar-year length of
+   {{ ctx.constants.lunar_year_days }} days &mdash; pure arithmetic on day counts. The
+   <strong>Umm al-Qura calendar</strong> is used only to <em>label</em> reporting years
+   and show their Gregorian ranges. The choice of calendar library therefore cannot
+   change a zakat amount. Exact conversion is supported for Hijri years 1343&ndash;1500
+   (1924-08-01 to 2077-11-16); a date outside that range is refused rather than
+   silently approximated.</p>
+
+<h4>The <code>as of</code> date</h4>
+<p>The report cutoff is <strong>{{ report.as_of }}</strong>{% if ctx.filter_active %},
+   taken from Fava&rsquo;s time filter{% else %}, which is today{% endif %}.
+   Setting Fava&rsquo;s time filter changes the cutoff: a filter ending 2026-10-01 gives
+   you the position as at 2026-10-01. The filter moves the <em>end</em> only &mdash;
+   the timeline always starts at inception, because hawl has to be measured from when
+   wealth was actually acquired.</p>
+<p>Two consequences matter. First, nothing dated after the cutoff can affect the
+   result, so a forward-dated entry cannot inflate today&rsquo;s figure. Second, your
+   final balances are carried forward to the cutoff and keep accruing hawl even if
+   your ledger has had no entry for years &mdash; a quiet ledger is not a zakat-free
+   ledger.</p>
+
+<h3>Setting up your ledger</h3>
+<h4>1. Tag your accounts</h4>
+<pre class="bz-code">2020-01-01 open Assets:Bank:Savings      {{ cur }}
+  beancount_zakat: "asset"
+
+2020-01-01 open Liabilities:Loan-Payable {{ cur }}
+  beancount_zakat: "liability"
+
+2020-01-01 open Expenses:Donations:Zakat {{ cur }}
+  beancount_zakat: "expense"</pre>
+<p>Metadata anywhere in your ledger tree works, including inside
+   <code>include</code>d files. Untagged accounts are ignored entirely, which is how
+   you exclude personal-use assets such as a home or a car.</p>
+
+<h4>2. Record metal prices</h4>
+<pre class="bz-code">2026-01-01 price GLDTOLA  280000.00 {{ cur }}
+2026-01-01 price SLVTOLA    3300.00 {{ cur }}</pre>
+<p><code>GLDTOLA</code> and <code>SLVTOLA</code> are understood out of the box as a
+   price <em>per tola</em>. To quote per gram, or to use different symbols, declare
+   them explicitly &mdash; being unambiguous about the unit is required:</p>
+<pre class="bz-code">2020-01-01 custom "fava-extension" "beancount_zakat.fava_extension" "{
+  'metal_commodities': {'XAUGRAM': ['gold', 'gram'],
+                        'XAGGRAM': ['silver', 'gram']},
+}"</pre>
+<p>Other options: <code>zakat_rate</code> (write it as <code>'2.5%'</code> or
+   <code>0.025</code>), <code>gold_nisab_grams</code>,
+   <code>silver_nisab_grams</code>, <code>price_staleness_days</code>.</p>
+
+<h3>Limitations and assumptions</h3>
+<ul>
+  <li><strong>The pro-rata layered model is a choice, not a consensus.</strong> Most
+      scholarly guidance has you value your wealth on one annual zakat date and pay
+      2.5% of it, treating the hawl as a gate that either opens or does not. This tool
+      treats the hawl as a gate <em>and</em> then accrues liability in proportion to
+      elapsed time, reconstructing a marginal, per-slice liability across your whole
+      ledger history. The consequence is a running figure that keeps growing between
+      payments rather than a fixed sum settled once a year, and it will differ from a
+      conventional annual calculation. See the methodology note above for the reasoning.
+      <strong>Discuss the method itself with your scholar, not merely the
+      numbers.</strong></li>
+  <li><strong>Each slice keeps its own hawl.</strong> Newly acquired wealth begins a
+      fresh holding period rather than being folded into an existing household hawl.
+      That is closer to the treatment of separately acquired wealth than to the Hanafi
+      practice of adding new acquisitions to the existing pool and paying on one
+      date.</li>
+  <li><strong>The nisab is a moving threshold, not a fixed sum.</strong> It tracks the
+      metal price, so it differs on every date in your history. No single figure is
+      quoted as &ldquo;the&rdquo; nisab anywhere in this report: the
+      <b>Wealth &amp; Nisab</b> tab lists every change with the price behind it and the
+      date that price was quoted, and <b>Calculation Detail</b> shows the range in
+      force during each period.</li>
+  <li><strong>Gram equivalents vary.</strong> This tool uses 87.48 g gold and
+      612.36 g silver (7.5 and 52.5 tola), the figures common in South Asia. Other
+      reputable institutions publish 85 g and 595 g. Human Appeal, for instance,
+      states &ldquo;85 grams of gold or 595 grams of silver&rdquo;. That is roughly a
+      3% difference in the threshold. Override the constants if your authority uses
+      different ones.</li>
+  <li><strong>Which liabilities are deductible is your decision.</strong> The tool
+      subtracts exactly the accounts you tag <code>liability</code> and nothing else.
+      Scholars differ sharply on long-term debt, mortgages and future instalments.
+      Tagging is where that judgement is expressed.</li>
+  <li><strong>Which assets are zakatable is your decision too.</strong> Personal-use
+      property, pensions and receivables of doubtful recovery all have distinct
+      rulings, and none of them are inferred from account names.</li>
+  <li><strong>Shares are the clearest case of that.</strong> Stock bought to sell on
+      is trade goods, and this tool counts it at whatever market value your ledger
+      gives it. A holding kept instead for dividends or capital growth is commonly
+      treated by looking through to the zakatable assets of the company itself, which
+      no ledger records &mdash; so that treatment is outside what this tool models.
+      Tag the first kind; leave the second untagged.</li>
+  <li><strong>No zakat anniversary is modelled.</strong> Many people fix a personal
+      zakat date, often in Ramadan. This tool works from continuous holding periods.</li>
+  <li><strong>Prices are taken on trust.</strong> They come from your ledger and are
+      not fetched or checked. Stale prices are flagged but still used.</li>
+  <li><strong>Payments are not allocated per basis.</strong> A payment reduces both
+      the gold and the silver balance, since a payment is a single real-world event
+      and the bases are alternative views of it.</li>
+  <li><strong>Nothing here accounts for zakat al-fitr</strong>, zakat on agricultural
+      produce or livestock, or <em>rikaz</em>, which follow different rules entirely.</li>
+</ul>
+
+<h3>Sources</h3>
+<p>Cited for the factual and religious claims above. The methodology in the previous
+   section is <em>not</em> drawn from these sources &mdash; it is this software&rsquo;s
+   own construction, as stated. Web sources retrieved 2026-08-19.</p>
+<ul class="bz-src">
+  <li><strong>Qur&rsquo;an</strong>, <cite>al-Baqarah</cite> 2:110 and
+      <cite>al-Tawbah</cite> 9:60, 9:103 &mdash; the obligation of zakat and its
+      categories of recipients.</li>
+  <li><strong>Sahih al-Bukhari</strong>, <cite>Kitab al-Zakah</cite> (Book of
+      Obligatory Charity) &mdash; the classical basis for the nisab thresholds and the
+      requirement that wealth be held for a full lunar year.</li>
+  <li><strong>AAOIFI</strong>, <cite>Shari&rsquo;ah Standard No. 35: Zakah</cite>
+      &mdash; the standard institutional reference for contemporary zakat accounting
+      practice, including the treatment of liabilities.</li>
+  <li><strong>Human Appeal</strong>, &ldquo;What Is Nisab? The Zakat Threshold
+      Explained&rdquo;,
+      <a href="https://humanappealusa.org/news/2026/7/what-is-nisab-the-zakat-threshold-explained"
+         rel="noopener noreferrer" target="_blank">humanappealusa.org</a>
+      &mdash; states the 2.5% rate, the complete-lunar-year hawl, the 85 g / 595 g
+      figures, and that both the gold and the silver basis are &ldquo;a valid position
+      backed by scholarship&rdquo;.</li>
+  <li><strong>Zakat Foundation of America</strong>, &ldquo;How Do You Calculate Zakat
+      on Gold&rdquo;,
+      <a href="https://www.zakat.org/how-do-you-calculate-zakat-on-gold"
+         rel="noopener noreferrer" target="_blank">zakat.org</a>.</li>
+</ul>
+
+<h3>Disclaimer</h3>
+<div class="bz-disclaimer" role="note">
+  <p><strong>This tool is for informational and record-keeping purposes only.</strong>
+     Zakat rulings can vary by school of jurisprudence, asset type, debt treatment,
+     personal circumstances, locality, and scholar. The software may contain errors
+     and does not constitute religious, legal, tax, accounting, or financial advice.
+     Verify the inputs and calculations and consult a qualified Islamic scholar and
+     appropriate professional before acting.</p>
+</div>

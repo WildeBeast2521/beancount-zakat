@@ -1,0 +1,115 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beancount-zakat"
+# Single-sourced from the package, so `beancount-zakat --version`, the wheel and
+# the PyPI page can never disagree. Bump it in `src/beancount_zakat/__init__.py`.
+dynamic = ["version"]
+description = "Zakat calculation for Beancount ledgers, with a Fava dashboard and a standalone CLI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "WildeBeast2521" }]
+keywords = ["beancount", "fava", "zakat", "accounting", "islamic-finance"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Environment :: Web Environment",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Accounting",
+  "Topic :: Religion",
+  "Typing :: Typed",
+]
+
+# Deliberately minimal. `fava` is NOT a runtime dependency: the calculation
+# engine and the CLI must work without it. Install the `fava` extra for the
+# dashboard.
+dependencies = [
+  "beancount>=3.0,<4",
+  "hijridate>=2.5,<3",
+]
+
+[project.optional-dependencies]
+# The Fava dashboard. 1.30 is the floor because that is where the extension
+# report route renders templates as fragments and `extension_static` is gone.
+fava = ["fava>=1.30,<2"]
+dev = [
+  "beancount-zakat[fava]",
+  "pytest>=8",
+  "pytest-cov>=5",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.scripts]
+beancount-zakat = "beancount_zakat.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/WildeBeast2521/beancount-zakat"
+Documentation = "https://github.com/WildeBeast2521/beancount-zakat#readme"
+Source = "https://github.com/WildeBeast2521/beancount-zakat"
+Issues = "https://github.com/WildeBeast2521/beancount-zakat/issues"
+Changelog = "https://github.com/WildeBeast2521/beancount-zakat/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/beancount_zakat/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/beancount_zakat"]
+
+# No force-include needed: `packages` already ships every file under the
+# package directory, templates and the JS module included.
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/examples",
+  "/docs",
+  "/README.md",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/SECURITY.md",
+  "/RELEASING.md",
+  "/requirements.txt",
+  "/requirements-dev.txt",
+]
+# Screenshots are repository evidence, not something a package consumer needs;
+# they are ~2.9 MB and their README links do not resolve on PyPI anyway.
+exclude = ["/docs/screenshots"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:beancount_zakat.*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]
+ignore = [
+  "A003",    # dataclass fields may shadow builtins (`Warning`)
+  "RUF012",  # mutable class attrs are fine on plain config dicts
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/beancount_zakat"]
+ignore_missing_imports = true
+warn_unused_ignores = false
+disallow_untyped_defs = false

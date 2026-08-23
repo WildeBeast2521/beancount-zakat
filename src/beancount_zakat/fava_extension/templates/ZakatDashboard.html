@@ -1,0 +1,1042 @@
+{#-
+  Zakat Dashboard -- Fava extension report template.
+
+  This is a FRAGMENT. Fava 1.30 renders it and injects the result into its own
+  _layout.html, so it must not `extends` anything and must not emit <html>,
+  <head> or <body>. CSS is inlined because Fava exposes no static-asset route
+  for extensions; behaviour lives in ZakatDashboard.js, loaded through
+  has_js_module.
+-#}
+{% set ctx = extension.report() %}
+{% set report = ctx.report %}
+{% set cur = ctx.currency %}
+{% set dp = ctx.places %}
+{% macro m(value, places=None) %}{{ extension.money(value, cur, dp if places is none else places) }}{% endmacro %}
+{% macro n(value, places=None) %}{{ extension.number(value, dp if places is none else places) }}{% endmacro %}
+
+<style>
+/*
+  Everything here is scoped to `.bz-root` so the dashboard can never restyle the
+  rest of Fava. The rules deliberately consume Fava's *own* custom properties
+  (`--text-color`, `--background-darker`, `--table-border`, `--link-color`, and
+  the rest of the set declared on `:root` in Fava's app.css) rather than
+  inventing a second palette. The dashboard therefore inherits Fava's theme,
+  including whatever the user picked in the colour-scheme switcher, and follows
+  it automatically when Fava's own colours change.
+
+  The `--lightningcss-light` / `--lightningcss-dark` pair is Fava's light/dark
+  switch: exactly one of them expands to `initial` and the other to nothing, so
+  `var(--lightningcss-light, A) var(--lightningcss-dark, B)` resolves to A or B.
+  Using it -- instead of a `prefers-color-scheme` media query -- is what makes
+  the two colours Fava does not define (gold and silver) respect an explicit
+  light/dark choice rather than only the operating system's.
+*/
+.bz-root {
+  --bz-fg: var(--text-color);
+  --bz-muted: var(--text-color-lightest);
+  --bz-bg: var(--background);
+  --bz-panel: var(--background-darker);
+  --bz-panel-darker: var(--background-darkest);
+  --bz-border: var(--border);
+  --bz-border-lighter: var(--border-lighter);
+  --bz-accent: var(--link-color);
+  --bz-ok: var(--green);
+  --bz-warn: var(--warning);
+  --bz-err: var(--error);
+  /* Not in Fava's palette. The metals need to stay apart from each other and
+     from the accent at both ends of the theme. */
+  --bz-gold: var(--lightningcss-light, #8a6100) var(--lightningcss-dark, #d9a94a);
+  --bz-silver: var(--lightningcss-light, #566572) var(--lightningcss-dark, #a8b6c4);
+  color: var(--bz-fg);
+  font-family: var(--font-family);
+  /* Use whatever width the viewport offers: the tables are wide and the charts
+     read better with more time on the x axis. Prose is capped separately. */
+  width: 100%;
+  max-width: none;
+  padding: 0 0 3rem;
+}
+/* Fava's type scale, verbatim: 1.2857em / 1.1429em against a 14px root, at
+   weight 500, so a Zakat heading and a Fava heading are the same object. */
+.bz-root :where(h2, h3, h4) { color: var(--heading-color, var(--bz-fg));
+                              font-weight: 500; margin: 0 0 1rem; padding: 0; }
+.bz-root h2 { font-size: 1.2857em; }
+.bz-root h3 { font-size: 1.1429em; margin-top: 1.5rem; }
+.bz-root h4 { font-size: 1em; margin-top: 1.1rem; margin-bottom: .5rem; }
+.bz-root p { margin: 0 0 1rem; max-width: 70ch; }
+.bz-root a:link, .bz-root a:visited { color: var(--link-color); text-decoration: none; }
+.bz-root a:hover, .bz-root a:focus-visible { color: var(--link-hover-color); }
+.bz-root a:focus-visible { outline: var(--link-color) dotted 2px; }
+
+/* --- Header ------------------------------------------------------------- */
+/* Fava's own `.headerline`: a wrapping flex row with 1em of space beneath. */
+.bz-head { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem;
+           align-items: baseline; margin: 0 0 1em; }
+.bz-head h2 { margin: 0 1.5em 0 0; }
+.bz-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem;
+           font-size: .85rem; color: var(--bz-muted); }
+.bz-meta b { color: var(--bz-fg); font-weight: 500; }
+
+/* --- Tabs --------------------------------------------------------------- */
+.bz-tablist { display: flex; flex-wrap: wrap; gap: .15rem;
+              border-bottom: 1px solid var(--bz-border); margin-bottom: 1.25rem; }
+.bz-tab { appearance: none; background: none; border: 0;
+          border-bottom: 3px solid transparent; margin-bottom: -1px;
+          padding: .5em .75em; font: inherit; font-weight: 500;
+          color: var(--bz-muted); cursor: pointer; white-space: nowrap;
+          border-radius: 0; }
+.bz-tab:hover { color: var(--bz-fg); background: var(--bz-panel);
+                box-shadow: none; filter: none; }
+.bz-tab[aria-selected="true"] { color: var(--bz-fg);
+                                border-bottom-color: var(--bz-accent); }
+.bz-tab:focus-visible { outline: var(--link-color) dotted 2px; outline-offset: -2px; }
+.bz-panel[hidden] { display: none; }
+
+/* --- Cards -------------------------------------------------------------- */
+/* Built out of Fava's `details` chrome: a 1px `--table-border` box with a
+   `--summary-background` head, so the cards sit in the same visual family as
+   the collapsible panels elsewhere in Fava. */
+.bz-cards { display: grid; gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.bz-card { border: 1px solid var(--table-border); padding: .75em 1em 1em;
+           background: var(--bz-panel); }
+.bz-card--gold { border-top: 3px solid var(--bz-gold); }
+.bz-card--silver { border-top: 3px solid var(--bz-silver); }
+.bz-card h3 { margin-top: 0; }
+.bz-card dl { display: grid; grid-template-columns: 1fr auto;
+              gap: .4rem 1rem; margin: .75rem 0 0; }
+.bz-card dt { color: var(--bz-muted); }
+.bz-card dd { margin: 0; text-align: right;
+              font-family: var(--font-family-monospaced);
+              font-variant-numeric: tabular-nums; }
+.bz-headline { font-size: 1.5rem; font-weight: 500;
+               font-family: var(--font-family-monospaced);
+               font-variant-numeric: tabular-nums; }
+.bz-card dl.bz-total { border-top: 1px solid var(--table-border);
+                       margin-top: .75rem; padding-top: .75rem; }
+
+/* --- Status chips ------------------------------------------------------- */
+/* Fava's `.status-indicator` is colour only; these carry a word and a glyph as
+   well, because a zakat verdict must not depend on the reader seeing hue. */
+.bz-chip { display: inline-flex; align-items: baseline; gap: .35rem;
+           font-size: .85em; font-weight: 500; padding: 0 .5em;
+           border-radius: 15px; border: 1px solid currentColor; }
+.bz-chip--yes { color: var(--bz-ok); }
+.bz-chip--no { color: var(--bz-muted); }
+.bz-chip--out { color: var(--bz-err); }
+.bz-chip--excess { color: var(--bz-ok); }
+.bz-chip--settled { color: var(--bz-muted); }
+
+/* --- Callouts ----------------------------------------------------------- */
+.bz-note { border: 1px solid var(--table-border); border-left-width: 4px;
+           padding: .5em .75em; margin: 0 0 1rem; background: var(--bz-panel); }
+.bz-note--error { border-left-color: var(--bz-err); }
+.bz-note--warn { border-left-color: var(--bz-warn); }
+.bz-note--info { border-left-color: var(--bz-accent); }
+.bz-note h4 { margin: 0 0 .25rem; }
+.bz-note pre { margin: .4rem 0 0; white-space: pre-wrap;
+               background-color: var(--code-background);
+               border: 1px solid var(--border); border-radius: 3px;
+               color: var(--bz-muted); padding: 6px 10px; overflow: auto; }
+.bz-disclaimer { border: 1px solid var(--bz-warn); padding: .75em 1em; margin: 1rem 0; }
+.bz-disclaimer p:last-child { margin-bottom: 0; }
+
+/* --- Tables ------------------------------------------------------------- */
+/* Fava's table chrome, copied rule for rule: header cells take
+   `--table-header-background` / `--table-header-text` at weight 400, every cell
+   is bordered with `--table-border`, even rows take `--table-background-even`,
+   and numeric cells are 7em of right-aligned monospace. */
+.bz-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.bz-table { border-spacing: 0; border-collapse: collapse; width: 100%; }
+.bz-table caption { text-align: left; padding: 2px 5px .6rem;
+                    color: var(--bz-muted); }
+.bz-table th, .bz-table td { padding: 2px 5px; text-align: left;
+                             white-space: nowrap; }
+.bz-table thead th { color: var(--table-header-text);
+                     background-color: var(--table-header-background);
+                     border: 1px solid var(--table-border); font-weight: 400;
+                     position: sticky; top: 0; }
+.bz-table tbody td { border: 1px solid var(--table-border); }
+.bz-table tbody tr:nth-child(2n) { background-color: var(--table-background-even); }
+.bz-table td.num, .bz-table th.num { width: 7em; text-align: right;
+                                     font-family: var(--font-family-monospaced);
+                                     font-variant-numeric: tabular-nums; }
+.bz-table tbody tr:hover { background-color: var(--journal-hover-highlight,
+                                                  var(--background-darkest)); }
+.bz-table tfoot td { color: var(--table-header-text);
+                     background-color: var(--table-header-background);
+                     border: 1px solid var(--table-border); font-weight: 400; }
+.bz-table td.wrap { white-space: normal; min-width: 22ch; }
+.bz-sub th { color: var(--bz-muted); background: var(--bz-panel);
+             font-weight: 400; }
+.bz-row--break td { color: var(--bz-muted); font-style: italic; }
+.bz-empty { padding: 1.25rem; color: var(--bz-muted); text-align: center; }
+/* Fava marks its sortable headers with `data-order`; ours announce `aria-sort`
+   for screen readers, so the same triangles hang off that instead. */
+.bz-table th[aria-sort] { padding-right: 18px; position: relative; }
+.bz-table th[aria-sort="descending"]::after {
+  content: ""; display: block; position: absolute; top: 8px; right: 4px;
+  border-top: 5px solid var(--text-color-lightest);
+  border-left: 5px solid #0000; border-right: 5px solid #0000; }
+.bz-table th[aria-sort="ascending"]::after {
+  content: ""; display: block; position: absolute; top: 6px; right: 4px;
+  border-bottom: 5px solid var(--text-color-lightest);
+  border-left: 5px solid #0000; border-right: 5px solid #0000; }
+
+/* --- Chart -------------------------------------------------------------- */
+/* `svg text` inherits Fava's chart typography; the axis and the zero rule use
+   Fava's dedicated `--chart-axis` / `--chart-line-at-zero`. */
+.bz-chart { width: 100%; height: auto; display: block; }
+.bz-chart text, .bz-strip text { font-family: var(--font-family);
+                                 fill: var(--text-color-lightest); }
+.bz-chart .bz-grid { stroke: var(--chart-axis, #999); stroke-width: 1; opacity: .4; }
+.bz-chart .bz-axis-label { fill: var(--text-color-lightest); font-size: 11px; }
+.bz-chart .bz-line-wealth { stroke: var(--bz-accent); stroke-width: 2; fill: none; }
+.bz-chart .bz-line-gold { stroke: var(--bz-gold); stroke-width: 2; fill: none;
+                          stroke-dasharray: 7 4; }
+.bz-chart .bz-line-silver { stroke: var(--bz-silver); stroke-width: 2; fill: none;
+                            stroke-dasharray: 2 3; }
+
+/* Stacked composition bands. Presentation only: the stack is the same net
+   wealth the engine computed, drawn as its parts rather than recomputed.
+   Assets rise from the zero line, liabilities hang below it.
+
+   The ten fills are Fava's own categorical scale --- `hcl_color_range(10)` from
+   its charts module, which is hue 270 + n*36 at chroma 45 and luminance 70 in
+   CIE HCL. Reusing it means an account is tinted the same way here as in Fava's
+   native charts, and the slots wrap at ten exactly as Fava's ordinal scale
+   does. */
+.bz-root { --bz-cat-0:#7eaefd; --bz-cat-1:#c29bee; --bz-cat-2:#eb8cc6;
+           --bz-cat-3:#f78a94; --bz-cat-4:#e5986a; --bz-cat-5:#beaa57;
+           --bz-cat-6:#8bb866; --bz-cat-7:#4bbf90; --bz-cat-8:#00c0c3;
+           --bz-cat-9:#17bbec; }
+.bz-chart .bz-band { stroke: var(--bz-bg); stroke-width: .6; opacity: .88; }
+.bz-chart .bz-band--liability { opacity: .72; }
+.bz-chart .bz-band--i0 { fill: var(--bz-cat-0); }
+.bz-chart .bz-band--i1 { fill: var(--bz-cat-1); }
+.bz-chart .bz-band--i2 { fill: var(--bz-cat-2); }
+.bz-chart .bz-band--i3 { fill: var(--bz-cat-3); }
+.bz-chart .bz-band--i4 { fill: var(--bz-cat-4); }
+.bz-chart .bz-band--i5 { fill: var(--bz-cat-5); }
+.bz-chart .bz-band--i6 { fill: var(--bz-cat-6); }
+.bz-chart .bz-band--i7 { fill: var(--bz-cat-7); }
+.bz-chart .bz-band--i8 { fill: var(--bz-cat-8); }
+.bz-chart .bz-band--i9 { fill: var(--bz-cat-9); }
+.bz-chart .bz-zero { stroke: var(--chart-line-at-zero, #666); stroke-width: 1.25; }
+/* On the stacked chart the net-wealth line runs across fills drawn from the
+   same scale the accent belongs to, and in the dark theme the two blues sit
+   close together. A one-pixel halo in the page colour separates the line from
+   whatever band is behind it without changing the line's colour, which has to
+   stay the same on every chart. */
+.bz-chart:has(.bz-band) .bz-line-wealth { filter: drop-shadow(0 0 1.5px var(--bz-bg)); }
+.bz-legend { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem;
+             margin-top: .5rem; }
+.bz-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.bz-swatch { width: 1.5rem; height: 0; border-top-width: 3px; border-top-style: solid; }
+.bz-swatch--block { width: .9rem; height: .8rem; border-top: 0; border-radius: 2px; }
+
+/* --- Interactive chart chrome ------------------------------------------- */
+.bz-figure { margin: 0 0 1rem; }
+/* Fava's `.flex-row`: a wrapping, centre-aligned row on a `--flex-gap` grid. */
+.bz-chart-bar { display: flex; flex-wrap: wrap; gap: var(--flex-gap, .5rem) 1rem;
+                align-items: center; justify-content: space-between;
+                margin-bottom: .35rem; }
+.bz-toggles { display: flex; flex-wrap: wrap; gap: var(--flex-gap, .5rem);
+              align-items: center; }
+/* Fava's `button.round`: pill-shaped, 1.5em tall, muted-button colours. */
+.bz-toggle { appearance: none; display: inline-flex; align-items: center; gap: .4rem;
+             border: 0; border-radius: 15px; padding: 0 .75em;
+             color: var(--button-muted-color);
+             background-color: var(--button-muted-background);
+             font: inherit; cursor: pointer; }
+.bz-toggle:hover { box-shadow: var(--box-shadow-button); filter: brightness(90%); }
+.bz-toggle[aria-pressed="false"] { opacity: .55; text-decoration: line-through; }
+.bz-toggle:focus-visible { outline: var(--link-color) dotted 2px; outline-offset: 2px; }
+.bz-legend-key { display: inline-flex; align-items: center; gap: .4rem;
+                 color: var(--bz-muted); }
+.bz-range { display: flex; flex-wrap: wrap; gap: var(--flex-gap, .5rem);
+            align-items: center; margin-left: auto; color: var(--bz-muted); }
+.bz-range-sep { color: var(--bz-muted); }
+/* Fava's input chrome: `--placeholder-background` behind a `--border-darker`
+   hairline, on the shared `--input-padding` rhythm. */
+.bz-input { font: inherit; padding: 2px 6px;
+            border: var(--input-border, 1px solid var(--border-darker));
+            background: var(--placeholder-background); color: var(--text-color); }
+.bz-plot { position: relative; }
+.bz-chart .bz-crosshair { stroke: var(--chart-axis, #999); stroke-width: 1;
+                          stroke-dasharray: 3 3; }
+.bz-chart .bz-crosshair[hidden] { display: none; }
+.bz-chart .bz-dot { fill: var(--bz-bg); stroke-width: 2; }
+.bz-chart .bz-dot-wealth { stroke: var(--bz-accent); }
+.bz-chart .bz-dot-gold { stroke: var(--bz-gold); }
+.bz-chart .bz-dot-silver { stroke: var(--bz-silver); }
+.bz-chart .bz-surface { cursor: crosshair; }
+/* Fava's `.tooltip`: monospaced, on `--background` inside a `--border`
+   hairline, lifted by `--box-shadow-button`. Ours stays anchored to the
+   crosshair instead of floating above the cursor, so it does not take Fava's
+   translate or its arrow. */
+.bz-tip { position: absolute; pointer-events: none;
+          z-index: var(--z-index-floating-ui, 1);
+          font-family: var(--font-family-monospaced);
+          background: var(--background); border: 1px solid var(--border);
+          box-shadow: var(--box-shadow-button); padding: .5em;
+          min-width: 12rem; }
+.bz-tip[hidden] { display: none; }
+.bz-tip-date { font-weight: 500; margin-bottom: .25rem; }
+.bz-tip-row { display: grid; grid-template-columns: 1.5rem 1fr auto;
+              align-items: center; gap: .4rem; }
+.bz-tip-label { font-family: var(--font-family); color: var(--text-color-lightest);
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bz-tip-value { font-variant-numeric: tabular-nums; font-weight: 500; }
+.bz-tip-row--total { border-top: 1px solid var(--border); margin-top: .25rem;
+                     padding-top: .25rem; font-weight: 500; }
+.bz-figcaption { color: var(--bz-muted); margin-top: .4rem; max-width: 70ch; }
+.bz-figure[data-bz-rendered] .bz-legend--static { display: none; }
+.bz-acctlist { margin: 0; padding-left: 1.1rem; list-style-type: disc; }
+.bz-acctlist li { margin: .1rem 0; }
+
+/* --- Misc --------------------------------------------------------------- */
+.bz-actions { display: flex; flex-wrap: wrap; gap: var(--flex-gap, .5rem);
+              margin: 1rem 0; }
+/* Fava's `.button`: white on `--button-background`, square, .5em/.75em, and it
+   dims rather than moves on hover. */
+.bz-btn { display: inline-block; padding: .5em .75em; border: 0; border-radius: 0;
+          color: var(--button-color); background-color: var(--button-background);
+          font-weight: 400; }
+.bz-btn:link, .bz-btn:visited { color: var(--button-color); }
+.bz-btn:hover, .bz-btn:focus, .bz-btn:active {
+  color: var(--button-color); box-shadow: var(--box-shadow-button);
+  filter: brightness(90%); }
+.bz-btn:focus-visible { outline: var(--link-color) dotted 2px; }
+.bz-switch { display: inline-flex; border: 1px solid var(--border-darker);
+             margin-bottom: 1rem; }
+.bz-switch button { appearance: none; border: 0; border-radius: 0; font: inherit;
+                    padding: .5em .75em; cursor: pointer;
+                    color: var(--button-muted-color);
+                    background-color: var(--button-muted-background); }
+.bz-switch button[aria-pressed="true"] { color: var(--button-color);
+                                         background-color: var(--button-background); }
+.bz-switch button:focus-visible { outline: var(--link-color) dotted 2px;
+                                  outline-offset: -2px; }
+
+/* Below-nisab shading and the hawl strip */
+.bz-chart .bz-reset-band { fill: var(--text-color-lightest); opacity: .13; }
+.bz-band-key { width: 1.5rem; height: .85rem; display: inline-block;
+               background: var(--text-color-lightest); opacity: .3;
+               border-radius: 2px; }
+.bz-strip { width: 100%; height: auto; display: block; }
+.bz-strip .bz-grid { stroke: var(--chart-axis, #999); stroke-width: 1; opacity: .4; }
+.bz-strip .bz-axis-label { fill: var(--text-color-lightest); font-size: 11px; }
+.bz-seg--complete { fill: var(--bz-ok); }
+.bz-seg--incomplete { fill: var(--bz-warn); }
+.bz-seg--not-running { fill: var(--bz-muted); opacity: .35; }
+.bz-seg-key { width: 1.5rem; height: .85rem; display: inline-block;
+              border-radius: 2px; }
+.bz-legend .bz-seg--complete { background: var(--bz-ok); }
+.bz-legend .bz-seg--incomplete { background: var(--bz-warn); }
+.bz-legend .bz-seg--not-running { background: var(--bz-muted); opacity: .35; }
+
+.bz-accounts { columns: 2 18rem; }
+.bz-accounts li { break-inside: avoid; }
+.bz-src li { margin-bottom: .4rem; }
+/* Fava's `code`: monospaced on `--code-background` inside a `--border`
+   hairline, 3px radius, 0 4px of padding. */
+.bz-key { font-family: var(--font-family-monospaced);
+          background-color: var(--code-background);
+          border: 1px solid var(--border); border-radius: 3px;
+          padding: 0 4px; line-height: 1; }
+.bz-root pre.bz-code { font-family: var(--font-family-monospaced);
+                       background-color: var(--code-background);
+                       border: 1px solid var(--border); border-radius: 3px;
+                       white-space: pre; padding: 6px 10px; overflow: auto;
+                       margin: 0 0 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  .bz-root *, .bz-root *::before { transition: none !important; animation: none !important; }
+}
+@media (max-width: 767px) {
+  .bz-tablist { gap: 0; }
+  .bz-tab { padding: .5rem .55rem; }
+  .bz-card dl { grid-template-columns: 1fr; }
+  .bz-card dd { text-align: left; }
+}
+</style>
+
+<div class="bz-root" data-zakat-dashboard>
+
+{% if ctx.error %}
+  <div class="bz-note bz-note--error" role="alert">
+    <h4>Zakat report unavailable</h4>
+    <p>{{ ctx.error }}</p>
+  </div>
+{% else %}
+
+{% set gold = report.gold %}
+{% set silver = report.silver %}
+
+<div class="bz-head">
+  <h2>Zakat Dashboard</h2>
+  <div class="bz-meta">
+    <span>As of <b>{{ report.as_of }}</b> ({{ ctx.as_of_hijri }}){% if ctx.filter_active %} &mdash; from Fava&rsquo;s time filter{% endif %}</span>
+    <span>Currency <b>{{ cur }}</b></span>
+    <span>Rate <b>{{ ctx.constants.rate }}</b></span>
+    <span>
+      Data
+      {% if ctx.errors %}<b class="bz-chip bz-chip--out">&#9888; {{ ctx.errors|length }} error{{ '' if ctx.errors|length == 1 else 's' }}</b>
+      {% elif ctx.warnings %}<b class="bz-chip bz-chip--no">&#9888; {{ ctx.warnings|length }} warning{{ '' if ctx.warnings|length == 1 else 's' }}</b>
+      {% else %}<b class="bz-chip bz-chip--yes">&#10003; OK</b>{% endif %}
+    </span>
+  </div>
+</div>
+
+{% set tabs = [
+  ('overview',  'Overview'),
+  ('yearly',    'Yearly Summary'),
+  ('wealth',    'Wealth &amp; Nisab'),
+  ('detail',    'Calculation Detail'),
+  ('payments',  'Payments'),
+  ('about',     'About Zakat &amp; Methodology'),
+] %}
+
+<div class="bz-tablist" role="tablist" aria-label="Zakat report sections">
+  {% for key, label in tabs %}
+  <button type="button" class="bz-tab" role="tab" id="bz-tab-{{ key }}"
+          aria-controls="bz-panel-{{ key }}"
+          aria-selected="{{ 'true' if loop.first else 'false' }}"
+          tabindex="{{ '0' if loop.first else '-1' }}"
+          data-bz-tab="{{ key }}">{{ label|safe }}</button>
+  {% endfor %}
+</div>
+
+{#- ===================== 1. OVERVIEW ===================== -#}
+<section class="bz-panel" role="tabpanel" id="bz-panel-overview"
+         aria-labelledby="bz-tab-overview" tabindex="0" data-bz-panel="overview">
+
+  {% if ctx.errors %}
+    {% for w in ctx.errors %}
+    <div class="bz-note bz-note--error" role="alert">
+      <h4>Error &mdash; {{ w.code }}</h4>
+      <p>{{ w.message }}</p>
+      {% if w.detail %}<pre>{{ w.detail }}</pre>{% endif %}
+    </div>
+    {% endfor %}
+  {% endif %}
+  {% for w in ctx.warnings %}
+  <div class="bz-note bz-note--warn">
+    <h4>Warning &mdash; {{ w.code }}</h4>
+    <p>{{ w.message }}</p>
+    {% if w.detail %}<pre>{{ w.detail }}</pre>{% endif %}
+  </div>
+  {% endfor %}
+  {% for w in ctx.notes %}
+  <div class="bz-note bz-note--info"><h4>Note</h4><p>{{ w.message }}</p></div>
+  {% endfor %}
+
+  {% if report.is_empty %}
+  <div class="bz-note bz-note--info">
+    <h4>Nothing to calculate yet</h4>
+    <p>No account carries the <span class="bz-key">beancount_zakat</span> metadata, or
+       none of the tagged accounts has any postings on or before {{ report.as_of }}.
+       See the <b>About Zakat &amp; Methodology</b> tab for how to tag your accounts.</p>
+  </div>
+  {% else %}
+
+  <h3>Net Zakat Liability / Paid in Excess till date</h3>
+
+  <div class="bz-cards">
+    {% for b in ctx.bases %}
+    <div class="bz-card bz-card--{{ b.basis.value }}">
+      <h3>{{ b.basis.label }} basis</h3>
+      <p class="bz-headline">{{ extension.balance(b.remaining_or_excess, cur, dp) }}</p>
+      <p>
+        {% if b.status == 'outstanding' %}
+          <span class="bz-chip bz-chip--out">&#9679; Outstanding</span>
+        {% elif b.status == 'excess' %}
+          <span class="bz-chip bz-chip--excess">&#10003; Paid in excess</span>
+        {% else %}
+          <span class="bz-chip bz-chip--settled">&#8212; Settled</span>
+        {% endif %}
+        {% if b.qualifies_now %}
+          <span class="bz-chip bz-chip--yes">&#10003; Sahib-e-nisab today</span>
+        {% endif %}
+      </p>
+      <dl class="bz-total">
+        <dt>Cumulative liability (lifetime)</dt>
+        <dd>{{ m(b.cumulative_liability) }}</dd>
+        <dt>Zakat paid (net of refunds)</dt>
+        <dd>{{ m(b.payments_total) }}</dd>
+        <dt><strong>Remaining / excess</strong></dt>
+        <dd><strong>{{ m(b.remaining_or_excess) }}</strong></dd>
+      </dl>
+    </div>
+    {% endfor %}
+  </div>
+
+  <h3>Accounts in scope</h3>
+  <p>Only accounts carrying <span class="bz-key">beancount_zakat</span> metadata take part.
+     Everything else in your ledger is ignored.</p>
+  <div class="bz-scroll">
+    <table class="bz-table">
+      <caption>Account classification, read from <code>Open</code> directive metadata.</caption>
+      <thead><tr><th scope="col">Role</th><th scope="col">Accounts</th></tr></thead>
+      <tbody>
+      {% for label, accounts in [
+           ('Zakatable assets', report.asset_accounts),
+           ('Deductible liabilities', report.liability_accounts),
+           ('Zakat payments', report.payment_accounts),
+         ] %}
+        <tr><th scope="row">{{ label }}</th>
+            <td class="wrap">
+              {% if accounts %}
+              <ul class="bz-acctlist">
+                {% for account in accounts %}<li>{{ account }}</li>{% endfor %}
+              </ul>
+              {% else %}none{% endif %}
+            </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+{#- ===================== 2. YEARLY SUMMARY ===================== -#}
+<section class="bz-panel" role="tabpanel" id="bz-panel-yearly" hidden
+         aria-labelledby="bz-tab-yearly" tabindex="0" data-bz-panel="yearly">
+  <h3>Liability by Hijri reporting year</h3>
+  <p>A reporting year runs from 1 Muharram to the day before the next 1 Muharram.
+     Where a holding period spans more than one year its liability is split across
+     those years pro rata by days, so these rows sum <em>exactly</em> to the
+     cumulative totals shown on the Overview tab.</p>
+  <p>Balance columns are running and <strong>signed</strong>: a negative figure means
+     more has been paid than was owed at that point.</p>
+
+  <div class="bz-actions">
+    <a class="bz-btn" href="{{ extension.csv_url('yearly_summary.csv') }}">Download this table (CSV)</a>
+    <a class="bz-btn" href="{{ extension.csv_url() }}">Download everything (ZIP)</a>
+  </div>
+
+  <div class="bz-scroll">
+    <table class="bz-table" data-bz-sortable>
+      <caption>Zakat liability and payments per Hijri year, in {{ cur }}.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Hijri year</th>
+          <th scope="col">Gregorian range</th>
+          <th scope="col" class="num">Gold liability</th>
+          <th scope="col" class="num">Silver liability</th>
+          <th scope="col" class="num">Payments</th>
+          <th scope="col" class="num">Gold balance</th>
+          <th scope="col" class="num">Silver balance</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in report.year_rows %}
+        <tr>
+          <th scope="row">{{ row.label }}</th>
+          <td>{{ row.start }} &ndash; {{ row.end }}</td>
+          <td class="num">{{ n(row.gold_liability) }}</td>
+          <td class="num">{{ n(row.silver_liability) }}</td>
+          <td class="num">{{ n(row.payments) }}</td>
+          <td class="num">{{ n(row.gold_balance) }}</td>
+          <td class="num">{{ n(row.silver_balance) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="bz-empty">No reporting years yet.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if report.year_rows %}
+      <tfoot>
+        <tr>
+          <td colspan="2">Total</td>
+          <td class="num">{{ n(gold.cumulative_liability) }}</td>
+          <td class="num">{{ n(silver.cumulative_liability) }}</td>
+          <td class="num">{{ n(report.payments_total) }}</td>
+          <td class="num">{{ n(gold.remaining_or_excess) }}</td>
+          <td class="num">{{ n(silver.remaining_or_excess) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+{#- ===================== 3. WEALTH & NISAB ===================== -#}
+<section class="bz-panel" role="tabpanel" id="bz-panel-wealth" hidden
+         aria-labelledby="bz-tab-wealth" tabindex="0" data-bz-panel="wealth">
+  <h3>Where the wealth is &mdash; distribution by account</h3>
+  <p>Each tagged account is a band. Anything held stacks upwards from the zero line
+     and anything owed hangs below it, so the gap between the two fronts is net
+     zakatable wealth &mdash; the same figure the calculation used, drawn as its
+     parts. The horizontal axis is proportional to real elapsed time, so a quiet
+     stretch looks like a quiet stretch, and every edge is stepped because a balance
+     holds its value until something changes it. The nisab is deliberately absent:
+     a stack front is a gross figure, and the threshold applies to the net.</p>
+
+  {% set stack = ctx.stack %}
+  {% if stack.is_empty %}
+    <div class="bz-empty">{{ stack.description }}</div>
+  {% else %}
+  <figure class="bz-figure" data-bz-chart>
+   <div class="bz-chart-bar">
+     <div class="bz-toggles" data-bz-toggles></div>
+     <div class="bz-range" data-bz-range></div>
+   </div>
+   <div class="bz-plot" data-bz-plot>
+    <svg class="bz-chart" viewBox="0 0 {{ stack.width }} {{ stack.height }}"
+         role="img" aria-labelledby="bz-stack-title bz-stack-desc"
+         preserveAspectRatio="xMidYMid meet">
+      <title id="bz-stack-title">Distribution of net zakatable wealth by account</title>
+      <desc id="bz-stack-desc">{{ stack.description }}</desc>
+      {% for tick in stack.y_ticks %}
+      <line class="bz-grid" x1="{{ stack.pad_left }}" y1="{{ '%.2f'|format(tick.position) }}"
+            x2="{{ stack.width - stack.pad_right }}" y2="{{ '%.2f'|format(tick.position) }}"/>
+      <text class="bz-axis-label" x="{{ stack.pad_left - 8 }}"
+            y="{{ '%.2f'|format(tick.position + 4) }}" text-anchor="end">{{ tick.label }}</text>
+      {% endfor %}
+      {% for tick in stack.x_ticks %}
+      <line class="bz-grid" x1="{{ '%.2f'|format(tick.position) }}" y1="{{ stack.pad_top }}"
+            x2="{{ '%.2f'|format(tick.position) }}" y2="{{ stack.height - stack.pad_bottom }}"/>
+      <text class="bz-axis-label" x="{{ '%.2f'|format(tick.position) }}"
+            y="{{ stack.height - stack.pad_bottom + 18 }}" text-anchor="middle">{{ tick.label }}</text>
+      {% endfor %}
+      {% for band in stack.stack %}
+      <path class="bz-band bz-band--{{ band.role }} bz-band--i{{ band.index % 10 }}"
+            d="{{ band.area }}"><title>{{ band.account }}</title></path>
+      {% endfor %}
+      <line class="bz-zero" x1="{{ stack.pad_left }}" y1="{{ '%.2f'|format(stack.zero_y) }}"
+            x2="{{ stack.width - stack.pad_right }}" y2="{{ '%.2f'|format(stack.zero_y) }}"/>
+      {% for series, line in ctx.stack_paths %}
+        <path class="bz-line-{{ series.key }}" d="{{ line }}"/>
+      {% endfor %}
+    </svg>
+   </div>
+   <div class="bz-legend bz-legend--static">
+     <span><i class="bz-swatch" style="border-top-color:var(--bz-accent)"></i> Net zakatable wealth</span>
+     {% for band in stack.stack %}
+     <span><i class="bz-swatch bz-swatch--block"
+              style="background:var(--bz-cat-{{ band.index % 10 }})"></i>
+       {{ band.label }}{% if band.role == 'liability' %} (liability){% endif %}</span>
+     {% endfor %}
+   </div>
+   <figcaption class="bz-figcaption">Switch any account off to re-stack and rescale
+     the chart around what is left; narrow the dates with the control above; hover or
+     tap anywhere on the plot to read every visible account and the running stack
+     total at that date.</figcaption>
+   <script type="application/json" data-bz-chart-data>{{ ctx.stack_data|tojson }}</script>
+  </figure>
+  {% endif %}
+
+  <h3>Net zakatable wealth against both nisab thresholds</h3>
+  <p>The same net figure the stack adds up to, now on its own against both moving
+     thresholds. Gold and silver are alternative bases, never added together: each
+     line is a separate answer to &ldquo;was there enough to owe anything?&rdquo;</p>
+
+  {% set chart = ctx.chart %}
+  {% if chart.is_empty %}
+    <div class="bz-empty">{{ chart.description }}</div>
+  {% else %}
+  <figure class="bz-figure" data-bz-chart>
+   <div class="bz-chart-bar">
+     <div class="bz-toggles" data-bz-toggles></div>
+     <div class="bz-range" data-bz-range></div>
+   </div>
+   <div class="bz-plot" data-bz-plot>
+    <svg class="bz-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+         role="img" aria-labelledby="bz-chart-title bz-chart-desc"
+         preserveAspectRatio="xMidYMid meet">
+      <title id="bz-chart-title">Net zakatable wealth and nisab thresholds over time</title>
+      <desc id="bz-chart-desc">{{ chart.description }}</desc>
+      {% for tick in chart.y_ticks %}
+      <line class="bz-grid" x1="{{ chart.pad_left }}" y1="{{ '%.2f'|format(tick.position) }}"
+            x2="{{ chart.width - chart.pad_right }}" y2="{{ '%.2f'|format(tick.position) }}"/>
+      <text class="bz-axis-label" x="{{ chart.pad_left - 8 }}"
+            y="{{ '%.2f'|format(tick.position + 4) }}" text-anchor="end">{{ tick.label }}</text>
+      {% endfor %}
+      {% for tick in chart.x_ticks %}
+      <line class="bz-grid" x1="{{ '%.2f'|format(tick.position) }}" y1="{{ chart.pad_top }}"
+            x2="{{ '%.2f'|format(tick.position) }}" y2="{{ chart.height - chart.pad_bottom }}"/>
+      <text class="bz-axis-label" x="{{ '%.2f'|format(tick.position) }}"
+            y="{{ chart.height - chart.pad_bottom + 18 }}" text-anchor="middle">{{ tick.label }}</text>
+      {% endfor %}
+      {% for series, line in ctx.chart_paths %}
+        <path class="bz-line-{{ series.key }}" d="{{ line }}"/>
+      {% endfor %}
+    </svg>
+   </div>
+   <div class="bz-legend bz-legend--static">
+     <span><i class="bz-swatch" style="border-top-color:var(--bz-accent)"></i> Net zakatable wealth</span>
+     <span><i class="bz-swatch" style="border-top-color:var(--bz-gold);border-top-style:dashed"></i> Gold nisab</span>
+     <span><i class="bz-swatch" style="border-top-color:var(--bz-silver);border-top-style:dotted"></i> Silver nisab</span>
+   </div>
+   <figcaption class="bz-figcaption">Switch a line off to rescale the chart around
+     what is left; narrow the dates with the control above; hover or tap anywhere on
+     the plot to read every visible line at that date.</figcaption>
+   <script type="application/json" data-bz-chart-data>{{ ctx.chart_data|tojson }}</script>
+  </figure>
+  {% endif %}
+
+  <h3>Nisab thresholds over time</h3>
+  <p>Every date on which either threshold moved, with the price behind it and the date
+     that price was quoted. A day with no price of its own reuses the last known price,
+     so a row stands until the next one replaces it.</p>
+  <div class="bz-scroll">
+    <table class="bz-table">
+      <caption>Nisab in {{ cur }} at each change, with its source price.</caption>
+      <thead>
+        <tr>
+          <th scope="col">In force from</th>
+          <th scope="col" class="num">Gold price</th>
+          <th scope="col">Quoted</th>
+          <th scope="col" class="num">Gold nisab</th>
+          <th scope="col" class="num">Silver price</th>
+          <th scope="col">Quoted</th>
+          <th scope="col" class="num">Silver nisab</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in ctx.nisab_history %}
+        <tr>
+          <th scope="row">{{ row.when }}</th>
+          <td class="num">{{ n(row.gold.price) if row.gold.price is not none else 'n/a' }}
+              {{ row.gold.commodity or '' }}</td>
+          <td>{{ row.gold.price_date or '&mdash;'|safe }}{% if row.gold_stale %}
+              <span class="bz-chip bz-chip--no">{{ row.gold.stale_days }}d old</span>{% endif %}</td>
+          <td class="num"><strong>{{ n(row.gold.nisab) if row.gold.nisab is not none else 'n/a' }}</strong></td>
+          <td class="num">{{ n(row.silver.price) if row.silver.price is not none else 'n/a' }}
+              {{ row.silver.commodity or '' }}</td>
+          <td>{{ row.silver.price_date or '&mdash;'|safe }}{% if row.silver_stale %}
+              <span class="bz-chip bz-chip--no">{{ row.silver.stale_days }}d old</span>{% endif %}</td>
+          <td class="num"><strong>{{ n(row.silver.nisab) if row.silver.nisab is not none else 'n/a' }}</strong></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="bz-empty">No metal prices found, so no nisab could be determined.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Wealth timeline</h3>
+  <p>Every date on which wealth changed &mdash; whether from a posting or purely from
+     a price movement. Holdings in a non-operating commodity are re-valued whenever
+     their price moves, not frozen at what they cost.</p>
+  <div class="bz-scroll">
+    <table class="bz-table">
+      <caption>Net zakatable wealth at each event, in {{ cur }}.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col">Cause</th>
+          <th scope="col" class="num">Assets</th>
+          <th scope="col" class="num">Liabilities</th>
+          <th scope="col" class="num">Net wealth</th>
+          <th scope="col" class="num">Gold nisab</th>
+          <th scope="col" class="num">Silver nisab</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for point in report.wealth_series %}
+        {% set gp = report.gold_nisab_series[loop.index0] %}
+        {% set sp = report.silver_nisab_series[loop.index0] %}
+        <tr>
+          <th scope="row">{{ point.when }}</th>
+          <td>{{ 'price movement' if point.price_driven else 'posting' }}</td>
+          <td class="num">{{ n(point.assets) }}</td>
+          <td class="num">{{ n(point.liabilities) }}</td>
+          <td class="num"><strong>{{ n(point.net) }}</strong></td>
+          <td class="num">{{ n(gp.nisab) if gp.nisab is not none else 'n/a' }}</td>
+          <td class="num">{{ n(sp.nisab) if sp.nisab is not none else 'n/a' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="bz-empty">No wealth events recorded.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Account composition as at {{ report.as_of }}</h3>
+  <p>Values in {{ cur }}. Liabilities keep their natural negative sign, so the
+     figures add up rather than needing to be stacked by hand.</p>
+  <div class="bz-scroll">
+    <table class="bz-table">
+      <caption>Contribution of each tagged account to net zakatable wealth.</caption>
+      <thead><tr><th scope="col">Account</th><th scope="col">Role</th>
+                 <th scope="col" class="num">Value</th></tr></thead>
+      <tbody>
+      {% if report.wealth_series %}
+        {% set last = report.wealth_series[-1] %}
+        {% for account, value in last.by_account | dictsort %}
+        <tr>
+          <th scope="row" class="wrap">{{ account }}</th>
+          <td>{{ 'liability' if account in report.liability_accounts else 'asset' }}</td>
+          <td class="num">{{ n(value) }}</td>
+        </tr>
+        {% endfor %}
+      <tr><td colspan="2"><strong>Net</strong></td>
+          <td class="num"><strong>{{ n(last.net) }}</strong></td></tr>
+      {% else %}
+        <tr><td colspan="3" class="bz-empty">No accounts with balances.</td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{#- ===================== 4. CALCULATION DETAIL ===================== -#}
+<section class="bz-panel" role="tabpanel" id="bz-panel-detail" hidden
+         aria-labelledby="bz-tab-detail" tabindex="0" data-bz-panel="detail">
+  <h3>Marginal levels and holding periods</h3>
+  <p>Each distinct level your net wealth has reached becomes a <strong>marginal
+     slice</strong> with its own independent hawl. A slice&rsquo;s period runs only while
+     net wealth stays at or above that slice&rsquo;s level <em>and</em> total net wealth
+     stays at or above the nisab.</p>
+  <p>The two bases are shown separately.</p>
+
+  <div class="bz-switch" role="group" aria-label="Choose nisab basis">
+    <button type="button" data-bz-basis="gold" aria-pressed="true">Gold nisab</button>
+    <button type="button" data-bz-basis="silver" aria-pressed="false">Silver nisab</button>
+  </div>
+
+  {% for sec in ctx.detail %}
+  {% set b = sec.result %}
+  <div data-bz-basis-panel="{{ sec.basis.value }}"{% if sec.basis.value != 'gold' %} hidden{% endif %}>
+
+    <h4>{{ sec.basis.label }} basis &mdash; wealth against the {{ sec.basis.value }} nisab</h4>
+    <p>The chart plots net zakatable wealth over time against the {{ sec.basis.value }}
+       nisab alone. Shaded spans mark the stretches in which wealth sat below that
+       threshold.</p>
+
+    {% set ch = sec.chart %}
+    {% if ch.is_empty %}
+      <div class="bz-empty">{{ ch.description }}</div>
+    {% else %}
+    <figure class="bz-figure" data-bz-chart>
+     <div class="bz-chart-bar">
+       <div class="bz-toggles" data-bz-toggles></div>
+       <div class="bz-range" data-bz-range></div>
+     </div>
+     <div class="bz-plot" data-bz-plot>
+      <svg class="bz-chart" viewBox="0 0 {{ ch.width }} {{ ch.height }}"
+           role="img" aria-labelledby="bz-ct-{{ sec.basis.value }} bz-cd-{{ sec.basis.value }}"
+           preserveAspectRatio="xMidYMid meet">
+        <title id="bz-ct-{{ sec.basis.value }}">Net zakatable wealth against the {{ sec.basis.value }} nisab</title>
+        <desc id="bz-cd-{{ sec.basis.value }}">{{ ch.description }}</desc>
+        {% for band in ch.reset_bands %}
+        <rect class="bz-reset-band" x="{{ '%.2f'|format(band[0]) }}" y="{{ ch.pad_top }}"
+              width="{{ '%.2f'|format(band[1] - band[0]) }}"
+              height="{{ ch.height - ch.pad_top - ch.pad_bottom }}"/>
+        {% endfor %}
+        {% for tick in ch.y_ticks %}
+        <line class="bz-grid" x1="{{ ch.pad_left }}" y1="{{ '%.2f'|format(tick.position) }}"
+              x2="{{ ch.width - ch.pad_right }}" y2="{{ '%.2f'|format(tick.position) }}"/>
+        <text class="bz-axis-label" x="{{ ch.pad_left - 8 }}"
+              y="{{ '%.2f'|format(tick.position + 4) }}" text-anchor="end">{{ tick.label }}</text>
+        {% endfor %}
+        {% for tick in ch.x_ticks %}
+        <text class="bz-axis-label" x="{{ '%.2f'|format(tick.position) }}"
+              y="{{ ch.height - ch.pad_bottom + 18 }}" text-anchor="middle">{{ tick.label }}</text>
+        {% endfor %}
+        {% for line, d in sec.paths %}
+          <path class="bz-line-{{ line.key }}" d="{{ d }}"/>
+        {% endfor %}
+      </svg>
+     </div>
+     <div class="bz-legend bz-legend--static">
+       <span><i class="bz-swatch" style="border-top-color:var(--bz-accent)"></i> Net zakatable wealth</span>
+       <span><i class="bz-swatch" style="border-top-color:var(--bz-{{ sec.basis.value }});border-top-style:dashed"></i> {{ sec.basis.label }} nisab</span>
+       <span><i class="bz-band-key"></i> Below nisab &mdash; hawl reset</span>
+     </div>
+     <figcaption class="bz-figcaption">Switch a line off to rescale the chart around
+       what is left; narrow the dates with the control above; hover or tap anywhere on
+       the plot to read the wealth and the threshold at that date.</figcaption>
+     <script type="application/json" data-bz-chart-data>{{ sec.chart_data|tojson }}</script>
+    </figure>
+    {% endif %}
+
+    {% set st = sec.strip %}
+    {% if not st.is_empty %}
+    <h4>Hawl timeline &mdash; {{ sec.basis.label }} basis</h4>
+    <p>One band per marginal slice, on the same time axis as the chart above. A band is
+       green while its hawl is complete, amber while it is running but short of a lunar
+       year, and grey where wealth fell below the nisab and the clock was reset.
+       {% if st.truncated %}Showing the {{ st.rows|length }} largest slices;
+       {{ st.truncated }} smaller ones are omitted from this view but are all in the
+       table below.{% endif %}</p>
+    <div class="bz-scroll">
+      <svg class="bz-strip" viewBox="0 0 {{ st.width }} {{ st.height }}"
+           role="img" aria-labelledby="bz-st-{{ sec.basis.value }} bz-sd-{{ sec.basis.value }}"
+           preserveAspectRatio="xMidYMid meet">
+        <title id="bz-st-{{ sec.basis.value }}">Hawl timeline for the {{ sec.basis.value }} basis</title>
+        <desc id="bz-sd-{{ sec.basis.value }}">{{ st.description }}</desc>
+        {% for tick in st.x_ticks %}
+        <line class="bz-grid" x1="{{ '%.2f'|format(tick.position) }}" y1="{{ st.pad_top }}"
+              x2="{{ '%.2f'|format(tick.position) }}" y2="{{ st.height - st.pad_bottom }}"/>
+        <text class="bz-axis-label" x="{{ '%.2f'|format(tick.position) }}"
+              y="{{ st.height - st.pad_bottom + 18 }}" text-anchor="middle">{{ tick.label }}</text>
+        {% endfor %}
+        {% for row in st.rows %}
+        <text class="bz-axis-label" x="{{ st.pad_left - 8 }}"
+              y="{{ row.y + row.height - 4 }}" text-anchor="end">{{ row.label }}</text>
+        {% for seg in row.segments %}
+        <rect class="bz-seg bz-seg--{{ seg.status }}" x="{{ '%.2f'|format(seg.x1) }}"
+              y="{{ row.y }}" width="{{ '%.2f'|format(seg.x2 - seg.x1) }}"
+              height="{{ row.height }}" rx="2"><title>{{ seg.label }}</title></rect>
+        {% endfor %}
+        {% endfor %}
+      </svg>
+    </div>
+    <div class="bz-legend">
+      <span><i class="bz-seg-key bz-seg--complete"></i> Hawl complete &mdash; zakat due</span>
+      <span><i class="bz-seg-key bz-seg--incomplete"></i> Running, short of a lunar year</span>
+      <span><i class="bz-seg-key bz-seg--not-running"></i> Below nisab &mdash; reset</span>
+    </div>
+    {% endif %}
+
+    <h4>{{ sec.basis.label }} basis &mdash; period detail</h4>
+    <div class="bz-actions">
+      <a class="bz-btn" href="{{ extension.csv_url('detail_' ~ sec.basis.value ~ '.csv') }}">Download {{ sec.basis.label }} detail (CSV)</a>
+    </div>
+    <div class="bz-scroll">
+      <table class="bz-table">
+        <caption>{{ sec.basis.label }} basis: every marginal slice and holding period, in {{ cur }}.
+                 The nisab column shows the <b>range</b> in force during the period, because the
+                 threshold moves with the metal price. Rows in italics are stretches spent below
+                 the nisab, where the hawl was reset.</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="num">Level</th>
+            <th scope="col" class="num">Marginal amount</th>
+            <th scope="col">Start</th>
+            <th scope="col">End</th>
+            <th scope="col" class="num">Days</th>
+            <th scope="col" class="num">Lunar years counted</th>
+            <th scope="col" class="num">{{ sec.basis.label }} nisab in force</th>
+            <th scope="col">Above nisab</th>
+            <th scope="col">Hawl</th>
+            <th scope="col" class="num">Zakat due</th>
+            <th scope="col">Why</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in sec.rows %}
+          {% set p = row.period %}
+          <tr class="{{ 'bz-row--break' if not p.above_nisab }}">
+            {% if row.first_of_level %}
+            <th scope="row" class="num" rowspan="{{ row.rows_in_level }}">{{ n(row.level) }}</th>
+            <td class="num" rowspan="{{ row.rows_in_level }}">{{ n(row.marginal) }}</td>
+            {% endif %}
+            <td>{{ p.start }}</td>
+            <td>{{ p.end }}</td>
+            <td class="num">{{ p.days }}</td>
+            <td class="num">{{ extension.years(p.lunar_years) }}</td>
+            <td class="num">{{ extension.nisab_span(row.nisab) }}</td>
+            <td>{% if p.above_nisab %}<span class="bz-chip bz-chip--yes">&#10003; yes</span>
+                {% else %}<span class="bz-chip bz-chip--no">&#8212; no</span>{% endif %}</td>
+            <td>
+              {% if p.hawl.value == 'complete' %}<span class="bz-chip bz-chip--yes">&#10003; complete</span>
+              {% elif p.hawl.value == 'incomplete' %}<span class="bz-chip bz-chip--no">&#8212; incomplete</span>
+              {% else %}<span class="bz-chip bz-chip--no">&#8709; reset (below nisab)</span>{% endif %}</td>
+            <td class="num">{{ n(p.zakat_due) }}</td>
+            <td class="wrap">{{ p.reason }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="11" class="bz-empty">No positive wealth levels were reached.</td></tr>
+        {% endfor %}
+        </tbody>
+        {% if sec.rows %}
+        <tfoot>
+          <tr>
+            <td colspan="9">Total {{ sec.basis.label|lower }} liability</td>
+            <td class="num">{{ n(b.cumulative_liability) }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+{#- ===================== 5. PAYMENTS ===================== -#}
+<section class="bz-panel" role="tabpanel" id="bz-panel-payments" hidden
+         aria-labelledby="bz-tab-payments" tabindex="0" data-bz-panel="payments">
+  <h3>Zakat payments</h3>
+  <p>Every posting to an account tagged <span class="bz-key">beancount_zakat: "expense"</span>.
+     Signs are preserved: a negative posting is a refund or a correcting reversal and
+     <em>reduces</em> the total paid.</p>
+
+  <div class="bz-actions">
+    <a class="bz-btn" href="{{ extension.csv_url('payments.csv') }}">Download payments (CSV)</a>
+  </div>
+
+  <div class="bz-scroll">
+    <table class="bz-table">
+      <caption>Payment detail with a running total, in {{ cur }}.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col">Account</th>
+          <th scope="col">Payee / narration</th>
+          <th scope="col" class="num">As posted</th>
+          <th scope="col" class="num">Rate</th>
+          <th scope="col" class="num">Amount</th>
+          <th scope="col">Kind</th>
+          <th scope="col" class="num">Running total</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% set ns = namespace(running=0) %}
+      {% for p in report.payments %}
+        {% set ns.running = ns.running + p.amount %}
+        <tr class="{{ 'bz-row--break' if p.is_reversal }}">
+          <th scope="row">{{ p.when }}</th>
+          <td class="wrap">{{ p.account }}</td>
+          <td class="wrap">{{ [p.payee, p.narration]|select|join(' &mdash; ')|safe }}</td>
+          <td class="num">{{ n(p.original_amount) }} {{ p.original_currency }}</td>
+          <td class="num">{{ n(p.rate, 6) if p.rate is not none else '&mdash;'|safe }}</td>
+          <td class="num">{{ n(p.amount) }}</td>
+          <td>{% if p.is_reversal %}<span class="bz-chip bz-chip--no">&#8592; refund</span>
+              {% else %}<span class="bz-chip bz-chip--yes">&#10003; payment</span>{% endif %}</td>
+          <td class="num">{{ n(ns.running) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="bz-empty">
+          No zakat payments recorded. Tag the account you pay zakat from with
+          <span class="bz-key">beancount_zakat: "expense"</span> so payments are tracked here.
+        </td></tr>
+      {% endfor %}
+      </tbody>
+      {% if report.payments %}
+      <tfoot>
+        <tr><td colspan="5">Total paid (net of refunds)</td>
+            <td class="num">{{ n(report.payments_total) }}</td>
+            <td></td><td class="num">{{ n(report.payments_total) }}</td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  <h3>How payments meet the liability</h3>
+  <div class="bz-cards">
+    {% for b in ctx.bases %}
+    <div class="bz-card bz-card--{{ b.basis.value }}">
+      <h4>{{ b.basis.label }} basis</h4>
+      <dl>
+        <dt>Cumulative liability</dt><dd>{{ m(b.cumulative_liability) }}</dd>
+        <dt>Less payments</dt><dd>{{ m(b.payments_total) }}</dd>
+        <dt><strong>Remaining / excess</strong></dt>
+        <dd><strong>{{ m(b.remaining_or_excess) }}</strong></dd>
+      </dl>
+      <p>{{ extension.balance(b.remaining_or_excess, cur, dp) }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{#- ===================== 6. ABOUT (must be last) ===================== -#}
+<section class="bz-panel" role="tabpanel" id="bz-panel-about" hidden
+         aria-labelledby="bz-tab-about" tabindex="0" data-bz-panel="about">
+{% include "_zakat_about.html" %}
+</section>
+
+{% endif %}
+</div>

@@ -1,0 +1,72 @@
+name: Release
+
+# Publishing is driven by a tag, so what reaches PyPI is always something that
+# exists in the history. `python -m build` reads the version out of
+# src/beancount_zakat/__init__.py, and the job below refuses to publish if that
+# version and the tag disagree.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check the metadata PyPI will render
+        run: python -m twine check --strict dist/*
+
+      - name: The tag and the package version must agree
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          python - <<'PY'
+          import os, pathlib, re, sys
+          tag = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          src = pathlib.Path("src/beancount_zakat/__init__.py").read_text()
+          version = re.search(r'__version__ = "([^"]+)"', src).group(1)
+          if tag != version:
+              sys.exit(f"tag v{tag} does not match __version__ {version}")
+          print(f"tag and package agree on {version}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # A GitHub environment gives you somewhere to require a manual approval
+    # before anything is uploaded. Create it in Settings -> Environments.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/beancount-zakat
+    permissions:
+      # Trusted Publishing: GitHub mints a short-lived OIDC token that PyPI
+      # verifies against the publisher you configured there. No API token is
+      # stored in this repository, and there is nothing to rotate or leak.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

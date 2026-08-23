@@ -1,0 +1,70 @@
+# --- Private financial data -------------------------------------------------
+# Never commit a real ledger. The only Beancount files in this repository are
+# the synthetic fixtures under examples/ and tests/.
+*.beancount
+!examples/**/*.beancount
+!tests/**/*.beancount
+*.bean
+!examples/**/*.bean
+# Fava's on-disk cache can contain account names and balances from whatever
+# ledger it last opened.
+.fava*
+fava.cfg
+*.sqlite
+*.sqlite3
+# Exported reports carry the same figures as the ledger they came from.
+/zakat*.csv
+/*.csv
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# --- Environments -----------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# --- Build and packaging ----------------------------------------------------
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+pip-wheel-metadata/
+
+# --- Test, type and lint caches ---------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+junit*.xml
+
+# --- Editors and OS ---------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Tooling scratch --------------------------------------------------------
+node_modules/
+
+# Local agent instructions, not part of the published project.
+CLAUDE.md
+.claude/

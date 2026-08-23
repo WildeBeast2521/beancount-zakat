@@ -1,0 +1,36 @@
+;; Account declarations.
+;;
+;; The `beancount_zakat:` metadata key is the ONLY thing that decides which
+;; accounts take part in the calculation.  Three roles are recognised:
+;;
+;;   "asset"     counts positively towards zakatable wealth
+;;   "liability" counts with its natural (negative) Beancount sign
+;;   "expense"   postings here are zakat payments
+;;
+;; Accounts without the metadata are ignored entirely.
+
+2019-01-01 open Assets:Cash                          PKR
+  beancount_zakat: "asset"
+
+2019-01-01 open Assets:Bank:Savings                  PKR
+  beancount_zakat: "asset"
+
+;; A holding in a non-operating commodity.  It is re-valued every time the
+;; XAUGRAM price moves, not frozen at what it cost.
+2019-01-01 open Assets:Bullion:Gold                  XAUGRAM
+  beancount_zakat: "asset"
+
+;; A normal Beancount liability: its balance is negative, and it is subtracted
+;; from zakatable wealth by simple addition.
+2019-01-01 open Liabilities:Loan-Payable             PKR
+  beancount_zakat: "liability"
+
+2019-01-01 open Expenses:Donations:Zakat             PKR
+  beancount_zakat: "expense"
+
+;; Not tagged, so not zakatable: a car is a personal-use asset.
+2019-01-01 open Assets:Vehicle                       PKR
+
+2019-01-01 open Income:Salary                        PKR
+2019-01-01 open Expenses:Living                      PKR
+2019-01-01 open Equity:Opening-Balances

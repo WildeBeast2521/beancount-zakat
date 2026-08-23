@@ -1,0 +1,11 @@
+# Runtime dependencies of the calculation engine and the CLI.
+#
+# This file is a convenience for `pip install -r`. `pyproject.toml` is the
+# source of truth, and tests/test_packaging.py fails if the two disagree.
+# Fava is deliberately absent: it is an optional extra, not a requirement.
+# For the dashboard, install the extra instead:
+#
+#     pip install 'beancount-zakat[fava]'
+
+beancount>=3.0,<4
+hijridate>=2.5,<3

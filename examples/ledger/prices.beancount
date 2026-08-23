@@ -1,0 +1,44 @@
+;; Metal prices live in your own ledger, like any other price.
+;;
+;; GLDTOLA and SLVTOLA are understood out of the box as a price *per tola*.
+;; Any other symbol can be declared via the `metal_commodities` option --
+;; see main.beancount.
+;;
+;; A day with no price of its own reuses the last known price, so you only need
+;; a directive when the price actually moves.
+
+2019-01-01 price GLDTOLA   100000.00 PKR
+2019-01-01 price SLVTOLA     1200.00 PKR
+2019-01-01 price XAUGRAM     8500.00 PKR
+
+2020-01-01 price GLDTOLA   110000.00 PKR
+2020-01-01 price SLVTOLA     1300.00 PKR
+2020-01-01 price XAUGRAM     9400.00 PKR
+
+2021-01-01 price GLDTOLA   120000.00 PKR
+2021-01-01 price SLVTOLA     1400.00 PKR
+2021-01-01 price XAUGRAM    10200.00 PKR
+
+2022-01-01 price GLDTOLA   130000.00 PKR
+2022-01-01 price SLVTOLA     1500.00 PKR
+2022-01-01 price XAUGRAM    11100.00 PKR
+
+2023-01-01 price GLDTOLA   180000.00 PKR
+2023-01-01 price SLVTOLA     2100.00 PKR
+2023-01-01 price XAUGRAM    15400.00 PKR
+
+2024-01-01 price GLDTOLA   215000.00 PKR
+2024-01-01 price SLVTOLA     2500.00 PKR
+2024-01-01 price XAUGRAM    18400.00 PKR
+
+2025-01-01 price GLDTOLA   245000.00 PKR
+2025-01-01 price SLVTOLA     2900.00 PKR
+2025-01-01 price XAUGRAM    21000.00 PKR
+
+2026-01-01 price GLDTOLA   280000.00 PKR
+2026-01-01 price SLVTOLA     3300.00 PKR
+2026-01-01 price XAUGRAM    24000.00 PKR
+
+2026-07-01 price GLDTOLA   295000.00 PKR
+2026-07-01 price SLVTOLA     3450.00 PKR
+2026-07-01 price XAUGRAM    25300.00 PKR

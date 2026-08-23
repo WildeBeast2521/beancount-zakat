@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          # The layering test blocks Fava from sys.meta_path in a subprocess and
+          # the engine touches dates and Decimal rounding; both are worth
+          # exercising off Linux, but only once.
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install with the dev extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Test
+        run: pytest
+
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install with the dev extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Ruff
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+
+      - name: Mypy
+        run: mypy src/beancount_zakat
+
+  build:
+    name: Build and check the distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check the metadata PyPI will render
+        run: python -m twine check --strict dist/*
+
+      - name: Install the wheel into a clean environment and run the CLI
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/python -m pip install --upgrade pip
+          /tmp/smoke/bin/python -m pip install dist/*.whl
+          /tmp/smoke/bin/beancount-zakat --version
+          # The dashboard's template and JS module must survive the build: Fava
+          # loads them off the installed package, and a missing file shows up as
+          # an empty report rather than an import error.
+          /tmp/smoke/bin/python - <<'PY'
+          from importlib.resources import files
+
+          # Anchored on the top-level package, not on `fava_extension`: that
+          # submodule imports Fava at module scope, and Fava is deliberately not
+          # installed here. The files still have to be present.
+          root = files("beancount_zakat") / "fava_extension"
+          for name in ("ZakatDashboard.js", "templates/ZakatDashboard.html",
+                       "templates/_zakat_about.html"):
+              assert root.joinpath(name).is_file(), name
+          print("dashboard assets present")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/

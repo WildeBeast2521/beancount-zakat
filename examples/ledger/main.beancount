@@ -1,0 +1,95 @@
+;; ---------------------------------------------------------------------------
+;; beancount-zakat -- sanitized example ledger
+;;
+;; Entirely synthetic. Run it with:
+;;     beancount-zakat examples/ledger/main.beancount
+;;     beancount-zakat examples/ledger/main.beancount --as-of 2024-06-01
+;;     fava examples/ledger/main.beancount
+;;
+;; Note there is no transaction after 2025-03-10: the report still keeps
+;; accruing hawl right up to the --as-of date (default today), which is the
+;; whole point of the as_of cutoff.
+;; ---------------------------------------------------------------------------
+
+option "title" "Zakat Example Ledger"
+option "operating_currency" "PKR"
+
+;; Register the Fava dashboard.  The module path is the package, not the class.
+2019-01-01 custom "fava-extension" "beancount_zakat.fava_extension" "{
+  'metal_commodities': {'GLDTOLA': ['gold', 'tola'],
+                        'SLVTOLA': ['silver', 'tola']},
+}"
+
+include "accounts.beancount"
+include "prices.beancount"
+
+2019-01-01 commodity PKR
+2019-01-01 commodity GLDTOLA
+2019-01-01 commodity SLVTOLA
+2019-01-01 commodity XAUGRAM
+
+;; --- Below both nisabs -----------------------------------------------------
+2019-02-01 * "Opening balance"
+  Assets:Cash                          40000.00 PKR
+  Equity:Opening-Balances
+
+;; --- Above silver nisab, still below gold ----------------------------------
+2019-03-01 * "Employer" "Salary"
+  Assets:Bank:Savings                 260000.00 PKR
+  Income:Salary
+
+;; --- Above both nisabs; first marginal slice starts here --------------------
+2019-09-01 * "Employer" "Bonus"
+  Assets:Bank:Savings                 700000.00 PKR
+  Income:Salary
+
+;; --- A second, higher slice with its own independent hawl -------------------
+2020-06-15 * "Employer" "Salary arrears"
+  Assets:Bank:Savings                 300000.00 PKR
+  Income:Salary
+
+;; --- Non-operating commodity: revalued whenever XAUGRAM moves ---------------
+2021-02-01 * "Bullion dealer" "Buy 200g gold"
+  Assets:Bullion:Gold                    200 XAUGRAM @ 10200.00 PKR
+  Assets:Bank:Savings
+
+;; --- A real liability. Its balance is negative and reduces net wealth. -------
+2021-06-01 * "Bank" "Take a loan"
+  Assets:Cash                         200000.00 PKR
+  Liabilities:Loan-Payable
+
+;; --- Not zakatable: personal-use asset, account is untagged ------------------
+2021-07-01 * "Dealer" "Buy a car"
+  Assets:Vehicle                      600000.00 PKR
+  Assets:Bank:Savings
+
+;; --- Wealth drops below the gold nisab, resetting the gold hawl only ---------
+2022-02-01 * "Family" "Large personal expense"
+  Expenses:Living                     780000.00 PKR
+  Assets:Bank:Savings
+
+;; --- Recovery: a new gold hawl begins here -----------------------------------
+2022-08-01 * "Employer" "Salary"
+  Assets:Bank:Savings                 850000.00 PKR
+  Income:Salary
+
+2023-05-01 * "Bank" "Repay part of the loan"
+  Liabilities:Loan-Payable            120000.00 PKR
+  Assets:Cash
+
+;; --- Zakat payments. Signs are preserved: the 2024 entry is a refund. --------
+2023-10-01 * "Local zakat fund" "Zakat payment"
+  Expenses:Donations:Zakat             90000.00 PKR
+  Assets:Bank:Savings
+
+2024-02-15 * "Local zakat fund" "Refund of overpayment"
+  Expenses:Donations:Zakat            -15000.00 PKR
+  Assets:Bank:Savings
+
+2024-09-01 * "Local zakat fund" "Zakat payment"
+  Expenses:Donations:Zakat             60000.00 PKR
+  Assets:Bank:Savings
+
+2025-03-10 * "Employer" "Salary"
+  Assets:Bank:Savings                 250000.00 PKR
+  Income:Salary
