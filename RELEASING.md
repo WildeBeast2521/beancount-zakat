@@ -1,17 +1,12 @@
 # Releasing
 
-The version lives in exactly one place: `__version__` in
-`src/beancount_zakat/__init__.py`. `pyproject.toml` reads it from there
-(`[tool.hatch.version]`), so the wheel, the PyPI page and
-`beancount-zakat --version` cannot disagree.
+The version lives in exactly one place: `__version__` in `src/beancount_zakat/__init__.py`. `pyproject.toml` reads it from there (`[tool.hatch.version]`), so the wheel, the PyPI page and `beancount-zakat --version` cannot disagree.
 
 ## One-time setup on PyPI
 
-The release workflow uses [Trusted Publishing][tp], so there is no API token to
-create, store or rotate.
+The release workflow uses [Trusted Publishing][tp], so there is no API token to create, store or rotate.
 
-1. Sign in to <https://pypi.org> and open **Your projects → Publishing**, or go
-   straight to <https://pypi.org/manage/account/publishing/>.
+1. Sign in to <https://pypi.org> and open **Your projects → Publishing**, or go straight to <https://pypi.org/manage/account/publishing/>.
 2. Add a **pending publisher** for a project that does not exist yet:
 
    | Field | Value |
@@ -22,12 +17,9 @@ create, store or rotate.
    | Workflow name | `release.yml` |
    | Environment name | `pypi` |
 
-3. In the GitHub repository, **Settings → Environments → New environment**,
-   named `pypi`. Add yourself as a required reviewer if you want a manual
-   approval step between the build and the upload.
+3. In the GitHub repository, **Settings → Environments → New environment**, named `pypi`. Add yourself as a required reviewer if you want a manual approval step between the build and the upload.
 
-The first successful run creates the project on PyPI and converts the pending
-publisher into a real one.
+The first successful run creates the project on PyPI and converts the pending publisher into a real one.
 
 [tp]: https://docs.pypi.org/trusted-publishers/
 
@@ -59,9 +51,7 @@ git tag -a v1.1.0 -m "1.1.0"
 git push origin main --follow-tags
 ```
 
-The `Release` workflow builds, runs `twine check --strict`, refuses to continue
-if the tag and `__version__` disagree, and then publishes. Watch it under
-**Actions**; if you configured a required reviewer, it will wait for you there.
+The `Release` workflow builds, runs `twine check --strict`, refuses to continue if the tag and `__version__` disagree, and then publishes. Watch it under **Actions**; if you configured a required reviewer, it will wait for you there.
 
 ## Publishing by hand instead
 
@@ -73,14 +63,9 @@ python -m twine check --strict dist/*
 python -m twine upload dist/*     # username: __token__, password: pypi-…
 ```
 
-Create the token at <https://pypi.org/manage/account/token/>, scope it to this
-project once the project exists, and keep it out of the repository — `twine`
-reads `~/.pypirc` or the `TWINE_PASSWORD` environment variable.
+Create the token at <https://pypi.org/manage/account/token/>, scope it to this project once the project exists, and keep it out of the repository — `twine` reads `~/.pypirc` or the `TWINE_PASSWORD` environment variable.
 
 ## After a release
 
-- Check the rendered page at <https://pypi.org/project/beancount-zakat/>. The
-  README's screenshot links point at `docs/screenshots/`, which the sdist
-  deliberately excludes, so they resolve on GitHub and not on PyPI. That is
-  intentional — the images are ~4.5 MB of repository evidence.
+- Check the rendered page at <https://pypi.org/project/beancount-zakat/>. The README's screenshot links point at `docs/screenshots/`, which the sdist deliberately excludes, so they resolve on GitHub and not on PyPI. That is intentional — the images are ~4.5 MB of repository evidence.
 - Open a fresh `## Unreleased` heading in `CHANGELOG.md`.

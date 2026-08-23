@@ -12,6 +12,4 @@ labels: enhancement
 
 ### If this is about the calculation
 
-Which part is a matter of fiqh and which part is a matter of arithmetic? If a
-scholarly position is involved, say whose — the project does not invent sources,
-and it distinguishes universally agreed facts from its own modelling choices.
+Which part is a matter of fiqh and which part is a matter of arithmetic? If a scholarly position is involved, say whose — the project does not invent sources, and it distinguishes universally agreed facts from its own modelling choices.

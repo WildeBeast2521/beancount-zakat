@@ -1,8 +1,6 @@
 # CSV export schema
 
-`beancount-zakat LEDGER --csv PATH` writes seven files into `PATH` (a
-directory), or into a zip archive when `PATH` ends in `.zip`. The dashboard
-serves the same files from its download links.
+`beancount-zakat LEDGER --csv PATH` writes seven files into `PATH` (a directory), or into a zip archive when `PATH` ends in `.zip`. The dashboard serves the same files from its download links.
 
 | File | Contents |
 |---|---|
@@ -14,14 +12,11 @@ serves the same files from its download links.
 | `detail_silver.csv` | Silver marginal slices and holding periods |
 | `payments.csv` | Signed payment detail with a running total |
 
-Every field marked `*_at_as_of` describes the report date **only**. The nisab is
-a moving threshold; nothing in this export presents a single figure as if it
-applied throughout.
+Every field marked `*_at_as_of` describes the report date **only**. The nisab is a moving threshold; nothing in this export presents a single figure as if it applied throughout.
 
 ## Conventions
 
-Every file follows the same rules, and they are asserted by
-`tests/test_csv_export.py`:
+Every file follows the same rules, and they are asserted by `tests/test_csv_export.py`:
 
 | | |
 |---|---|
@@ -36,9 +31,7 @@ Every file follows the same rules, and they are asserted by
 | Booleans | lowercase `true` / `false` |
 | Empty values | empty string, never `None` or `NaN` |
 
-There is no locale grouping and no currency symbol anywhere, so a spreadsheet
-reads the numbers as numbers regardless of its locale. The operating currency is
-stated once, in `metadata.csv`.
+There is no locale grouping and no currency symbol anywhere, so a spreadsheet reads the numbers as numbers regardless of its locale. The operating currency is stated once, in `metadata.csv`.
 
 ---
 
@@ -81,13 +74,11 @@ One row per validation finding, in the order they were produced.
 | `commodity` | Commodity concerned, if any |
 | `date` | Date concerned, if any |
 
-Any row with `severity = error` means a displayed figure is not trustworthy;
-the CLI exits `1` when one is present.
+Any row with `severity = error` means a displayed figure is not trustworthy; the CLI exits `1` when one is present.
 
 ## `yearly_summary.csv`
 
-One row per Hijri reporting year, ascending. No gaps: a year with no activity
-still appears, with zeros.
+One row per Hijri reporting year, ascending. No gaps: a year with no activity still appears, with zeros.
 
 | column | meaning |
 |---|---|
@@ -98,17 +89,11 @@ still appears, with zeros.
 | `gold_balance` / `silver_balance` | **Running signed** balance at year end |
 | `gold_balance_status` / `silver_balance_status` | `outstanding` \| `settled` \| `excess` |
 
-**Reconciliation guarantee.** `sum(gold_liability)` equals
-`metadata.gold_cumulative_liability` exactly, and the last row's `gold_balance`
-equals `metadata.gold_remaining_or_excess` exactly. Likewise for silver, and
-`sum(payments)` equals the payment total. This is enforced by the invariant
-tests, not merely intended.
+**Reconciliation guarantee.** `sum(gold_liability)` equals `metadata.gold_cumulative_liability` exactly, and the last row's `gold_balance` equals `metadata.gold_remaining_or_excess` exactly. Likewise for silver, and `sum(payments)` equals the payment total. This is enforced by the invariant tests, not merely intended.
 
 ## `nisab_history.csv`
 
-One row per date on which **either** threshold changed, ascending. This is the
-authoritative record of the thresholds the calculation actually used — the nisab
-tracks the metal price, so it is different on almost every year of your history.
+One row per date on which **either** threshold changed, ascending. This is the authoritative record of the thresholds the calculation actually used — the nisab tracks the metal price, so it is different on almost every year of your history.
 
 | column | meaning |
 |---|---|
@@ -119,14 +104,11 @@ tracks the metal price, so it is different on almost every year of your history.
 | `gold_price_age_days` / `silver_price_age_days` | How stale the quote was |
 | `gold_nisab` / `silver_nisab` | The threshold it implies |
 
-A day with no price of its own reuses the last known price, so a row stands
-until the next one replaces it.
+A day with no price of its own reuses the last known price, so a row stands until the next one replaces it.
 
 ## `detail_gold.csv` and `detail_silver.csv`
 
-One row per holding period, grouped by marginal slice, slices ascending by
-level. Identical schemas, one file per basis — the thresholds are far apart and
-a reset under one basis says nothing about the other.
+One row per holding period, grouped by marginal slice, slices ascending by level. Identical schemas, one file per basis — the thresholds are far apart and a reset under one basis says nothing about the other.
 
 | column | meaning |
 |---|---|
@@ -149,10 +131,7 @@ a reset under one basis says nothing about the other.
 
 - `complete` — the period reached a full lunar year, so zakat is due on it.
 - `incomplete` — the clock was running but has not yet reached a year.
-- `not running` — wealth was below **this basis's** nisab, so the clock was
-  reset. `lunar_years` is `0` on such a row regardless of how many days it
-  spans: elapsed time during a reset counts for nothing, so reporting it as a
-  fraction of a year would be misleading.
+- `not running` — wealth was below **this basis's** nisab, so the clock was reset. `lunar_years` is `0` on such a row regardless of how many days it spans: elapsed time during a reset counts for nothing, so reporting it as a fraction of a year would be misleading.
 
 `sum(zakat_due)` equals that basis's `cumulative_liability` exactly.## `payments.csv`
 
@@ -170,8 +149,7 @@ One row per posting to a payment account, ascending by date then account.
 | `is_reversal` | `true` when `amount < 0` — a refund or correction |
 | `running_total` | Cumulative `amount` through this row |
 
-The final `running_total` equals `metadata.gold_payments` and
-`metadata.silver_payments`.
+The final `running_total` equals `metadata.gold_payments` and `metadata.silver_payments`.
 
 ---
 
@@ -190,5 +168,4 @@ detail = list(csv.DictReader(Path("out/detail_gold.csv").open(encoding="utf-8"))
 print(sum(Decimal(r["zakat_due"]) for r in detail))   # the same figure
 ```
 
-Use `Decimal`, not `float`: the values are exact and `float` would reintroduce
-the error the calculation went to some trouble to avoid.
+Use `Decimal`, not `float`: the values are exact and `float` would reintroduce the error the calculation went to some trouble to avoid.

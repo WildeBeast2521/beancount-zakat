@@ -12,5 +12,4 @@
 
 ### If this touches the calculation
 
-Which invariant in [`docs/architecture.md`](../docs/architecture.md) does it bear
-on, and why is the new behaviour the right one?
+Which invariant in [`docs/architecture.md`](../docs/architecture.md) does it bear on, and why is the new behaviour the right one?

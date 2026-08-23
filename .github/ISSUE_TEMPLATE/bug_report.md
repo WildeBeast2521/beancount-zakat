@@ -4,9 +4,7 @@ about: A figure is wrong, or something does not work
 labels: bug
 ---
 
-**Do not paste your real ledger.** Account names and balances are exactly the
-thing this project promises not to see. Reduce the problem to a synthetic
-ledger with made-up names and round numbers.
+**Do not paste your real ledger.** Account names and balances are exactly the thing this project promises not to see. Reduce the problem to a synthetic ledger with made-up names and round numbers.
 
 ### What happened
 
