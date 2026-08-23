@@ -7,6 +7,14 @@ All notable changes to this project are documented here. This project adheres to
 Nothing yet.
 
 
+## 1.0.1 — 2026-08-23
+
+Documentation only.
+
+- README: scope split into In-Scope / Out-Scope, extra PyPI badges, dropped the privacy and testing sections.
+- All Markdown unwrapped to one line per paragraph.
+
+
 ## 1.0.0 — 2026-08-23
 
 First release.
