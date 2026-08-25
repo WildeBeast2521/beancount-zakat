@@ -25,6 +25,7 @@ from beancount import loader
 
 from beancount_zakat import build_report
 from beancount_zakat.cli import EXIT_OK, main
+from beancount_zakat.models import BasisResult, ZakatReport
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "beancount_zakat"
@@ -465,12 +466,25 @@ class TestBadInputFailsLoudly:
 
 
 class TestAReportCannotBeChangedAfterItIsBuilt:
-    """Presentation gets a frozen result, so no view can alter a figure."""
+    """Presentation gets a frozen result, so no view can alter a figure.
 
-    def test_the_report_rejects_assignment(self, report):
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            report.zakat_rate = Decimal("0.05")
+    The field names come from the dataclasses themselves. Spelling one out here
+    risks testing an attribute that does not exist, which on Python before 3.13
+    fails for an unrelated reason: assigning an unknown attribute to a
+    ``frozen=True, slots=True`` dataclass raises ``TypeError`` from a broken
+    ``super()`` call rather than ``FrozenInstanceError``.
+    """
 
-    def test_its_parts_reject_assignment_too(self, report):
+    @pytest.mark.parametrize("field", [f.name for f in dataclasses.fields(ZakatReport)])
+    def test_every_field_of_the_report_rejects_assignment(self, report, field):
+        before = getattr(report, field)
         with pytest.raises(dataclasses.FrozenInstanceError):
-            report.gold.total_due = Decimal("0")
+            setattr(report, field, None)
+        assert getattr(report, field) is before
+
+    @pytest.mark.parametrize("field", [f.name for f in dataclasses.fields(BasisResult)])
+    def test_every_field_of_a_basis_result_rejects_assignment(self, report, field):
+        before = getattr(report.gold, field)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            setattr(report.gold, field, None)
+        assert getattr(report.gold, field) is before

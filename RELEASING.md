@@ -45,10 +45,14 @@ python -m venv /tmp/smoke
 /tmp/smoke/bin/beancount-zakat --version
 /tmp/smoke/bin/beancount-zakat examples/ledger/main.beancount --as-of 2026-08-20
 
-# 5. Commit, tag, push. The tag is what triggers the upload.
+# 5. Commit and push the branch. No tag yet.
 git commit -am "Release 1.1.0"
+git push origin main
+
+# 6. Wait for CI to go green on that commit, then tag it. The tag is what
+#    triggers the upload, and a tag cannot be moved once it has published.
 git tag -a v1.1.0 -m "1.1.0"
-git push origin main --follow-tags
+git push origin v1.1.0
 ```
 
 The `Release` workflow builds, runs `twine check --strict`, refuses to continue if the tag and `__version__` disagree, and then publishes. Watch it under **Actions**; if you configured a required reviewer, it will wait for you there.
@@ -67,5 +71,6 @@ Create the token at <https://pypi.org/manage/account/token/>, scope it to this p
 
 ## After a release
 
+- Create the GitHub Release: **Releases → Draft a new release**, choose the tag that was just pushed, paste the changelog entry, and **Publish** it. The workflow uploads to PyPI but does not create the Release, so this step is manual. Do not leave it as a draft: a draft release is invisible in the API and to everyone but you, and it keeps the tag looking unreleased.
 - Check the rendered page at <https://pypi.org/project/beancount-zakat/>. The README's screenshot links point at `docs/screenshots/`, which the sdist deliberately excludes, so they resolve on GitHub and not on PyPI. That is intentional — the images are ~4.5 MB of repository evidence.
 - Open a fresh `## Unreleased` heading in `CHANGELOG.md`.
