@@ -37,10 +37,10 @@ Written with AI assistance. See [How this was built](#how-this-was-built).
 ## What it does
 
 - Reads **every entry** loaded by your root ledger, `include`d files and all.
-- Selects accounts purely from `beancount_zakat:` metadata on `Open` directives.
+- Selects accounts purely from `beancount_zakat` metadata on `Open` directives.
 - Reconstructs net zakatable wealth over time, re-valuing holdings in other commodities whenever their prices move.
 - Runs a **layered / marginal hawl** model: every distinct wealth level becomes a slice with its own independent holding period.
-- **Dynamic nisab** — the prices of gold and silver affect the nisab continuously.
+- **Dynamic nisab:** the prices (as available from the beancount ledger) of gold and silver affect the nisab continuously.
 - Computes gold and silver independently.
 - Reports zakat owed (positive), or paid in excess (negative).
 - Defaults the cutoff to today.
@@ -49,26 +49,26 @@ Written with AI assistance. See [How this was built](#how-this-was-built).
 
 ### In-Scope
 
-`beancount-zakat` reads real-time balances of all accounts with the `beancount_zakat:` metadata, compares with the nisab, and applies the rate of 2.5%, and as the rate of 2.5% applies on general assets, therefore, for now, only the following zakatable assets supported:
+`beancount-zakat` reads real-time balances of all accounts with the `beancount_zakat` metadata, compares with the nisab, and applies the rate of 2.5%, and as the rate of 2.5% applies on general assets, therefore, for now, only the following zakatable assets supported:
 
 - **Cash, bank balances and other short-term asset**
-- **Holdings in other commodities** — gold, silver, a foreign currency — valued from the `price` directives already in your ledger.
-- **Stock bought for resale (short-term)** Shares or inventory held as trade goods, bought with the intention of selling on, are counted at market value like any other commodity holding.
-- **General short-term debts**, deducted from the total.
+- **Holdings in other commodities:** Gold, silver, a foreign currency, or any other commodity, valued from the `price` directives already in your ledger.
+- **Stock bought for resale (short-term):** Shares or inventory held as trade goods, bought with the intention of selling on, are counted at market value like any other commodity holding.
+- **General short-term debts:** deducted from the total.
 
 ### Out-Scope
 
-- **Zakat al-fitr** — the per-person charge at the end of Ramadan before Eid-ul-Fitr.
-- **Agricultural produce, livestock and *rikaz***. These carry their own rates and thresholds and are not modelled.
-- **Stock bought for holding (long-term)** Zakat is due on the proportionate ownership of the Zakatable assets of the companies invested in (or as a proxy), 2.5% of 25% of the market value of shares. This has not been implemented as of yet.
+- **Zakat al-fitr:** the per-person charge at the end of Ramadan before Eid-ul-Fitr.
+- **Agricultural produce, livestock and *rikaz*:** These carry their own rates and thresholds and are not modelled.
+- **Stock bought for holding (long-term):** Zakat is due on the proportionate ownership of the Zakatable assets of the companies invested in, or (as a proxy) 2.5% of 25% of the market value of shares. This has not been implemented as of yet.
 
 ### What is yours to decide
 
-- **Which assets are zakatable.** All and any asset, liability and expense account tagged with the `beancount_zakat:` metadata.
-- **Which debts are deductible.** Same mechanism, same reasoning.
-- **Which basis to follow.** Gold and silver are alternatives. Both are shown so you can compare them.
-- **The nisab weights**, if the authority you follow publishes different gram equivalents. They are configurable.
-- **Whether this tool's method matches your position.** It accrues liability in proportion to time held once the hawl is met — see [How the calculation works](#how-the-calculation-works).
+- **Which assets are zakatable:** All and any asset, liability and expense account tagged with the `beancount_zakat` metadata.
+- **Which debts are deductible:** Same mechanism, same reasoning.
+- **Which basis to follow:** Gold and silver are alternatives. Both are shown so you can compare them.
+- **The nisab weights:** If the authority you follow publishes different gram equivalents. They are configurable.
+- **Whether this tool's method matches your position:** It accrues liability in proportion to time held once the hawl is met — see [How the calculation works](#how-the-calculation-works).
 
 ## Installation
 
@@ -122,7 +122,7 @@ Prices come from ordinary `price` directives in your own ledger. `GLDTOLA` and `
 2026-01-01 price SLVTOLA    3300.00 PKR
 ```
 
-You only need a directive when the price actually moves — a day with no price of its own reuses the last known price. A price older than 90 days is still used but is flagged as stale.
+You only need a directive when the price actually moves, a day with no price of its own reuses the last known price. A price older than 90 days is still used but is flagged as stale.
 
 To quote per gram, or to use different symbols, declare them explicitly. The unit is required:
 
@@ -158,10 +158,10 @@ Then open the **Zakat** report. Six tabs:
 
 Notes:
 
-- **Fava's time filter sets the report cutoff.** A time filter ending 2026-10-01 gives you the position as at 2026-10-01, inclusive. The filter moves the *end* only; the timeline always starts at inception, because hawl has to be measured from when wealth was actually acquired. With no filter the cutoff is today.
-- **One chart stacks by account**, the first on Wealth & Nisab. Every tagged account is its own band: anything held stacks up from the zero line, anything owed hangs below it, so the gap between the two fronts is net zakatable wealth, with the net line drawn over the top. An overdrawn asset sits on the negative side too. Beyond eight accounts a side the smallest are pooled into a single *Other* band.
-- **Charts are interactive.** Switch any account or line off and what is left re-stacks and rescales; narrow the window with the date control at the top right (presets, or explicit from/to dates); hover anywhere on the plot for a crosshair readout of everything visible at that date, including the running stack total.
-- Tabs are keyboard-navigable, and the selected tab is kept in the URL so it can be bookmarked, linked to, and reached with the browser's back button.
+- **Fava's time filter:** Fava's time filter sets the report cutoff. A time filter ending 2026-10-01 gives you the position as at 2026-10-01, inclusive. The filter moves the *end* only; the timeline always starts at inception, because hawl has to be measured from when wealth was actually acquired. With no filter the cutoff is today.
+- **Stacked Wealth Chart:** the first on Wealth & Nisab. Every tagged account is its own band: anything held stacks up from the zero line, anything owed hangs below it, so the gap between the two fronts is net zakatable wealth, with the net line drawn over the top. An overdrawn asset sits on the negative side too. Beyond eight accounts a side the smallest are pooled into a single *Other* band.
+- **Interactive Charts:** Switch any account or line off and what is left re-stacks and rescales; narrow the window with the date control at the top right (presets, or explicit from/to dates); hover anywhere on the plot for a crosshair readout of everything visible at that date, including the running stack total.
+- **Keyboard Navigation:** Tabs are keyboard-navigable, and the selected tab is kept in the URL so it can be bookmarked, linked to, and reached with the browser's back button.
 
 ### Screenshots
 
