@@ -10,6 +10,8 @@
 
 Zakat calculation for [Beancount](https://beancount.github.io/) ledgers, with a [Fava](https://beancount.github.io/fava/) dashboard and a standalone CLI.
 
+Written with AI assistance. See [How this was built](#how-this-was-built).
+
 ---
 
 ## Contents
@@ -25,6 +27,7 @@ Zakat calculation for [Beancount](https://beancount.github.io/) ledgers, with a 
 - [How the calculation works](#how-the-calculation-works)
 - [Assumptions and limitations](#assumptions-and-limitations)
 - [Troubleshooting](#troubleshooting)
+- [How this was built](#how-this-was-built)
 - [Contributing](#contributing)
 - [License](#license)
 - [Disclaimer](#disclaimer)
@@ -289,6 +292,21 @@ Two notions of "lunar year" are kept strictly apart. The calculation measures ha
 **The report is slow on a large ledger** — the work grows with the number of distinct wealth levels rather than the number of transactions, so a long history of small changes is the expensive case. A synthetic 1,500-transaction ledger takes about two seconds. The dashboard caches the result, so only the first render after an edit pays for it.
 
 **Registration fails / the report does not appear** — check the module path is `beancount_zakat.fava_extension`, and that `pip install 'beancount-zakat[fava]'` put the package on the same interpreter that runs Fava.
+
+## How this was built
+
+Written under a fixed set of rules and reviewed decisions. The properties that matter are enforced by tests in [`tests/test_guarantees.py`](tests/test_guarantees.py), which run on every commit across Python 3.10-3.13 on Linux, macOS and Windows.
+
+- **No network access:** A full report is built in a subprocess with the socket API replaced by a function that raises. The run completes.
+- **No code generated at runtime:** No `eval`, `exec`, `compile` or `__import__`. No `pickle`, no `subprocess`, no shelling out.
+- **No writes without a request:** A plain run leaves the working directory byte-identical. An export writes only to the path it was given.
+- **Deterministic output:** Identical across processes started with different `PYTHONHASHSEED` values, so no figure and no row order depends on iteration order.
+- **No `float`:** A finished report is walked field by field and contains none. Every exported figure round-trips through `Decimal` exactly.
+- **No undeclared dependency:** Every third-party import in `src/` is declared in `pyproject.toml`.
+- **No private data:** No email address, no home directory path, no ledger outside `examples/` and the test fixtures.
+- **No crash on bad input:** An empty ledger, one with no tagged accounts, and one with no prices each produce a finding and an exit code.
+
+These sit on top of the main suite: per-module unit tests, whole-ledger behaviour tests, randomised property tests over generated wealth histories, reconciliation invariants that must hold exactly, and architectural tests that fail if the engine imports Fava or the pure layer imports Beancount.
 
 ## Contributing
 

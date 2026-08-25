@@ -47,6 +47,7 @@ The suite is not a coverage exercise. Most of it pins decisions that are easy to
 - `tests/test_properties.py` — the invariants again, against randomly generated wealth timelines rather than hand-written ones.
 - `tests/test_templates.py` — the shape of the shipped dashboard assets, and the Fava design tokens the stylesheet is required to consume.
 - `tests/test_packaging.py` — what a consumer actually receives on install.
+- `tests/test_guarantees.py` — the claims the README makes in public: no network, no runtime code generation, no stray writes, deterministic output, no floats in a finished report, no undeclared dependency, no private data in the tree. A failure here means a sentence in the README has become false, so fix the code rather than the test.
 
 If your change makes one of these fail, the interesting question is which of the two is wrong. Sometimes it is the test. Say so in the pull request and explain why.
 

@@ -4,7 +4,12 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
-Nothing yet.
+## 1.0.2 — 2026-08-25
+
+### Added
+
+- `tests/test_guarantees.py`, enforcing the properties the README states publicly: no network access, no runtime code generation, no writes outside a requested export, identical output across hash seeds, no `float` in a finished report, no undeclared third-party import, and no private data in the tree.
+- README section on how the project was built, including its use of AI assistance.
 
 
 ## 1.0.1 — 2026-08-23
