@@ -11,7 +11,7 @@
 Zakat calculation for [Beancount](https://beancount.github.io/) ledgers, with a [Fava](https://beancount.github.io/fava/) dashboard and a standalone CLI.
 
 <p align="center">
-  <img src="docs/assets/beancount-zakat-readme-hero.png" alt="Beancount Zakat dashboard showing gold and silver liability results and wealth over time" width="80%">
+  <img src="docs/assets/beancount-zakat-readme-hero.png" alt="Beancount Zakat dashboard showing gold and silver liability results and wealth over time" width="100%">
 </p>
 
 Written with AI assistance. See [How this was built](#how-this-was-built).
